@@ -6,7 +6,16 @@ from datetime import datetime
 from pathlib import Path
 
 from bouquet.models import WorktreeInfo, WorktreeStatus
-from bouquet.tui.widgets import ProjectHeader
+from bouquet.tui.app import OrchestratorApp
+from bouquet.tui.screens import NewWorktreeScreen
+from bouquet.tui.widgets import ProjectHeader, WorktreeTable
+
+
+def test_tui_modules_importable() -> None:
+    """Smoke test: all TUI modules import without error."""
+    assert OrchestratorApp is not None
+    assert NewWorktreeScreen is not None
+    assert WorktreeTable is not None
 
 
 def test_project_header_content() -> None:
