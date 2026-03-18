@@ -39,6 +39,8 @@ class TmuxConfig(BaseModel):
 
 
 class BouquetSettings(BaseSettings):
+    model_config = {"env_prefix": "BOUQUET_"}
+
     project: ProjectConfig = Field(default_factory=ProjectConfig)
     agent: AgentConfig = Field(default_factory=AgentConfig)
     bootstrap: BootstrapConfig = Field(default_factory=BootstrapConfig)
