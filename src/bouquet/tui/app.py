@@ -7,11 +7,11 @@ import sys
 from pathlib import Path
 
 import click
+from textual import work
 from textual.app import App, ComposeResult
 from textual.binding import Binding
 from textual.containers import Vertical
 from textual.widgets import Footer, Static
-from textual.work import work
 
 from bouquet.config import BouquetSettings, load_config
 from bouquet.models import SessionState
