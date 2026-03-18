@@ -15,10 +15,77 @@ Uses best-of-breed approach to support multiplexing agentic coding tasks:
 
 Make sure you have the needed OS packages installed, minimally:
 
-* direnv (on macOS `brew install direnv`)
 * tmux (on macOS `brew install tmux`)
-* tmuxinator (on macOS `brew install tmuxinator`)
+* direnv (on macOS `brew install direnv`) — optional, for env var management
 * relevant languages package managers (e.g. `uv`, `pnpm`)
+
+Then install bouquet:
+
+```bash
+# From the repo root
+uv sync
+
+# Or install via pip
+pip install -e .
+```
+
+
+## Usage
+
+### Initialize a project
+
+Generate a `.bouquet.toml` configuration file in your repo:
+
+```bash
+bouquet init --repo /path/to/your/repo
+```
+
+This creates a `.bouquet.toml` template. Edit it to configure your project name, languages, agent command, bootstrap settings, and tmux preferences.
+
+### Start a session
+
+```bash
+bouquet start my-project --repo /path/to/your/repo
+```
+
+This will:
+1. Create a tmux session named `bouquet-my-project`
+2. Launch the orchestrator TUI in window 0
+3. Attach you to the session
+
+You can also point to a specific config file:
+
+```bash
+bouquet start my-project --repo /path/to/repo --config /path/to/.bouquet.toml
+```
+
+### Using the TUI
+
+Once inside the tmux session, the orchestrator TUI in window 0 provides:
+
+| Key       | Action                                      |
+|-----------|---------------------------------------------|
+| `N`       | Create a new worktree (opens branch dialog) |
+| `Enter`   | Switch to the selected worktree's window    |
+| `D`       | Delete the selected worktree and its window |
+| `R`       | Refresh the worktree list                   |
+| `Q`       | Quit the TUI                                |
+
+When you create a new worktree, bouquet will:
+- Create a git worktree with a new branch
+- Bootstrap the environment (copy `.env` files, CoW-clone `.venv`/`node_modules`)
+- Open a new tmux window in the worktree directory
+- Auto-launch the configured agent command (e.g. `claude`)
+
+Switch back to the orchestrator at any time with `Ctrl-b 0` (tmux default).
+
+### Stop a session
+
+```bash
+bouquet stop my-project
+```
+
+This cleans up all managed git worktrees, kills the tmux session, and removes the session state file.
 
 
 ## Overview
@@ -40,4 +107,3 @@ The Conceptual Stack
 ├─────────────────────────────────────────┤
 │         Environment Layer               │  ← venv/node_modules/env vars
 └─────────────────────────────────────────┘
-
