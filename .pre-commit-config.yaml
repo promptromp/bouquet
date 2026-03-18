@@ -1,0 +1,43 @@
+fail_fast: true
+repos:
+- repo: https://github.com/pre-commit/pre-commit-hooks
+  rev: v6.0.0
+  hooks:
+    - id: check-added-large-files
+      args: [ --maxkb=8192 ]
+    - id: fix-byte-order-marker
+    - id: check-case-conflict
+    - id: check-json
+    - id: check-yaml
+      args: [ --unsafe ]
+    - id: detect-aws-credentials
+      args: [ --allow-missing-credentials ]
+    - id: detect-private-key
+    - id: end-of-file-fixer
+    - id: trailing-whitespace
+- repo: https://github.com/astral-sh/ruff-pre-commit
+  rev: v0.15.1
+  hooks:
+    # Run the linter.
+    - id: ruff-check
+      args: [ --fix ]
+    # Run the formatter.
+    - id: ruff-format
+- repo: https://github.com/pre-commit/mirrors-mypy
+  rev: v1.19.1
+  hooks:
+    - id: mypy
+      additional_dependencies:
+        - pydantic>=2.0
+        - pydantic-settings>=2.0
+        - click>=8.1
+        - libtmux>=0.37
+        - textual>=0.80
+- repo: local
+  hooks:
+  - id: pytest
+    name: pytest
+    entry: uv run python -m pytest tests/
+    language: system
+    types: [python]
+    pass_filenames: false

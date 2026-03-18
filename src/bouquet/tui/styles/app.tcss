@@ -1,0 +1,42 @@
+Screen {
+    layout: vertical;
+}
+
+.project-header {
+    dock: top;
+    height: 3;
+    content-align: center middle;
+    background: $accent;
+    color: $text;
+    text-style: bold;
+    padding: 1;
+}
+
+#body {
+    height: 1fr;
+    padding: 1 2;
+}
+
+#section-title {
+    margin-bottom: 1;
+    text-style: bold;
+}
+
+.worktree-table {
+    height: 1fr;
+}
+
+#footer-bar {
+    dock: bottom;
+    height: 3;
+    background: $surface;
+    padding: 1;
+    content-align: center middle;
+}
+
+#status-line {
+    dock: bottom;
+    height: 1;
+    background: $primary-background;
+    padding: 0 1;
+}

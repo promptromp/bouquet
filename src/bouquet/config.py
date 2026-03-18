@@ -1,0 +1,112 @@
+"""Configuration models and loading logic."""
+
+from __future__ import annotations
+
+import tomllib
+from pathlib import Path
+from typing import Any
+
+from pydantic import BaseModel, Field
+from pydantic_settings import BaseSettings
+
+
+class LanguagesConfig(BaseModel):
+    python: bool = True
+    javascript: bool = False
+
+
+class ProjectConfig(BaseModel):
+    name: str = "default"
+    repo_path: str = "."
+    base_branch: str = "main"
+    languages: LanguagesConfig = Field(default_factory=LanguagesConfig)
+
+
+class AgentConfig(BaseModel):
+    command: str = "claude"
+    args: list[str] = Field(default_factory=list)
+
+
+class BootstrapConfig(BaseModel):
+    copy_env_files: list[str] = Field(default_factory=lambda: [".env", ".env.local"])
+    python_deps_command: str = "uv sync --frozen"
+    node_deps_command: str = "pnpm install"
+    use_cow_clone: bool = True
+
+
+class TmuxConfig(BaseModel):
+    session_prefix: str = "bouquet"
+
+
+class BouquetSettings(BaseSettings):
+    project: ProjectConfig = Field(default_factory=ProjectConfig)
+    agent: AgentConfig = Field(default_factory=AgentConfig)
+    bootstrap: BootstrapConfig = Field(default_factory=BootstrapConfig)
+    tmux: TmuxConfig = Field(default_factory=TmuxConfig)
+
+
+def _load_toml(path: Path) -> dict[str, Any]:
+    """Load a TOML file and return its contents as a dict."""
+    with open(path, "rb") as f:
+        return tomllib.load(f)
+
+
+def load_config(
+    config_path: Path | None = None,
+    repo_path: Path | None = None,
+) -> BouquetSettings:
+    """Load configuration from file using search order:
+
+    1. Explicit --config flag
+    2. .bouquet.toml in repo root
+    3. ~/.config/bouquet/config.toml
+    4. Defaults
+    """
+    data: dict[str, Any] = {}
+
+    if config_path and config_path.exists():
+        data = _load_toml(config_path)
+    else:
+        # Search in repo root
+        repo = repo_path or Path.cwd()
+        repo_config = repo / ".bouquet.toml"
+        if repo_config.exists():
+            data = _load_toml(repo_config)
+        else:
+            # Search in user config dir
+            user_config = Path.home() / ".config" / "bouquet" / "config.toml"
+            if user_config.exists():
+                data = _load_toml(user_config)
+
+    settings = BouquetSettings(**data)
+
+    # Override repo_path if provided via CLI
+    if repo_path:
+        settings.project.repo_path = str(repo_path)
+
+    return settings
+
+
+TEMPLATE_CONFIG = """\
+[project]
+name = "{name}"
+repo_path = "."
+base_branch = "main"
+
+[project.languages]
+python = true
+javascript = false
+
+[agent]
+command = "claude"
+args = []
+
+[bootstrap]
+copy_env_files = [".env", ".env.local"]
+python_deps_command = "uv sync --frozen"
+node_deps_command = "pnpm install"
+use_cow_clone = true
+
+[tmux]
+session_prefix = "bouquet"
+"""
