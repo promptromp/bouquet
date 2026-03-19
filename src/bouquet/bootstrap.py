@@ -125,8 +125,9 @@ def bootstrap_worktree(
        hardcoded paths that break in a new location; let the deps
        command create a fresh venv instead)
     3. Run setup commands and capture env delta
-    4. Run dependency install commands (with setup env applied)
-    5. Allow direnv if configured
+    4. Pin Python version if configured
+    5. Run dependency install commands (with setup env applied)
+    6. Allow direnv if configured
 
     Returns a dict of environment variables that were added or changed by
     the setup commands (empty dict if none).
@@ -153,7 +154,18 @@ def bootstrap_worktree(
     # Build env for deps commands: current env + setup delta
     deps_env = {**os.environ, **env_delta} if env_delta else None
 
-    # 4. Run dependency install commands (shell=True to support compound
+    # 4. Pin Python version if configured (before deps so uv uses it)
+    if python and config.python_version:
+        with contextlib.suppress(FileNotFoundError):
+            subprocess.run(
+                ["uv", "python", "pin", config.python_version],
+                cwd=worktree_path,
+                env=deps_env,
+                capture_output=True,
+                check=False,
+            )
+
+    # 5. Run dependency install commands (shell=True to support compound
     #    commands like "cd subdir && pnpm install")
     if python and config.python_deps_command:
         with contextlib.suppress(FileNotFoundError):
@@ -177,7 +189,7 @@ def bootstrap_worktree(
                 shell=True,
             )
 
-    # 5. Allow direnv
+    # 6. Allow direnv
     if config.direnv_allow:
         _direnv_allow(worktree_path)
 

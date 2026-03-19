@@ -47,6 +47,7 @@ class AgentConfig(BaseModel):
 class BootstrapConfig(BaseModel):
     setup_commands: list[str] = Field(default_factory=list)
     copy_env_files: list[str] = Field(default_factory=lambda: [".env", ".env.local", ".envrc"])
+    python_version: str | None = None
     python_deps_command: str = "uv sync"
     node_deps_command: str = "pnpm install"
     use_cow_clone: bool = True
@@ -151,6 +152,7 @@ args = []
 # ]
 setup_commands = []
 copy_env_files = [".env", ".env.local", ".envrc"]
+# python_version = "3.13"   # Pin Python version in worktrees (runs `uv python pin`)
 python_deps_command = "uv sync"
 node_deps_command = "pnpm install"
 use_cow_clone = true

@@ -142,3 +142,81 @@ def test_bootstrap_env_passed_to_deps_command(tmp_path: Path, monkeypatch: objec
 
     assert marker.exists()
     assert marker.read_text() == "it_works"
+
+
+def test_bootstrap_python_version_creates_pin_file(tmp_path: Path) -> None:
+    """python_version should create a .python-version file in the worktree."""
+    worktree = tmp_path / "wt"
+    worktree.mkdir()
+
+    config = BootstrapConfig(
+        python_version="3.13",
+        copy_env_files=[],
+        python_deps_command="",
+        node_deps_command="",
+        use_cow_clone=False,
+        direnv_allow=False,
+    )
+
+    bootstrap_worktree(
+        repo_path=tmp_path,
+        worktree_path=worktree,
+        config=config,
+        python=True,
+        javascript=False,
+    )
+
+    pin_file = worktree / ".python-version"
+    assert pin_file.exists()
+    assert "3.13" in pin_file.read_text()
+
+
+def test_bootstrap_python_version_not_set_no_pin(tmp_path: Path) -> None:
+    """Without python_version, no .python-version should be created."""
+    worktree = tmp_path / "wt"
+    worktree.mkdir()
+
+    config = BootstrapConfig(
+        copy_env_files=[],
+        python_deps_command="",
+        node_deps_command="",
+        use_cow_clone=False,
+        direnv_allow=False,
+    )
+
+    bootstrap_worktree(
+        repo_path=tmp_path,
+        worktree_path=worktree,
+        config=config,
+        python=True,
+        javascript=False,
+    )
+
+    pin_file = worktree / ".python-version"
+    assert not pin_file.exists()
+
+
+def test_bootstrap_python_version_skipped_when_python_false(tmp_path: Path) -> None:
+    """python_version should be skipped when python=False."""
+    worktree = tmp_path / "wt"
+    worktree.mkdir()
+
+    config = BootstrapConfig(
+        python_version="3.13",
+        copy_env_files=[],
+        python_deps_command="",
+        node_deps_command="",
+        use_cow_clone=False,
+        direnv_allow=False,
+    )
+
+    bootstrap_worktree(
+        repo_path=tmp_path,
+        worktree_path=worktree,
+        config=config,
+        python=False,
+        javascript=False,
+    )
+
+    pin_file = worktree / ".python-version"
+    assert not pin_file.exists()

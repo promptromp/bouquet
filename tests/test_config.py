@@ -123,6 +123,11 @@ args = ["--model", "sonnet"]
     assert settings.agent.profiles[1].args == ["--model", "sonnet"]
 
 
+def test_default_python_version_none() -> None:
+    settings = BouquetSettings()
+    assert settings.bootstrap.python_version is None
+
+
 def test_default_setup_commands_empty() -> None:
     settings = BouquetSettings()
     assert settings.bootstrap.setup_commands == []
