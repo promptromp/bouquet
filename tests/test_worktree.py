@@ -8,7 +8,7 @@ from unittest.mock import MagicMock
 import pytest
 
 import bouquet.models as models_mod
-from bouquet.config import BouquetSettings
+from bouquet.config import BouquetSettings, ServiceConfig
 from bouquet.git import create_worktree as git_create_worktree
 from bouquet.models import SessionState, WorktreeStatus
 from bouquet.worktree import WorktreeManager
@@ -133,3 +133,95 @@ def test_remove_all(manager: WorktreeManager) -> None:
 
     manager.remove_all()
     assert len(manager.list_active()) == 0
+
+
+# --- Index allocation ---
+
+
+def test_index_allocation(manager: WorktreeManager) -> None:
+    info1 = manager.create("feature/idx1")
+    info2 = manager.create("feature/idx2")
+    assert info1.index == 1
+    assert info2.index == 2
+
+
+def test_index_reuse_after_removal(manager: WorktreeManager) -> None:
+    manager.create("feature/r1")  # index 1
+    manager.create("feature/r2")  # index 2
+    manager.remove("feature/r1")
+
+    info3 = manager.create("feature/r3")
+    assert info3.index == 1  # reused
+
+
+def test_adopt_existing_allocates_indices(manager: WorktreeManager, tmp_git_repo: Path) -> None:
+    wt_path = tmp_git_repo.parent / "manual-idx-wt"
+    git_create_worktree(tmp_git_repo, wt_path, "feature/manual-idx", "main")
+
+    adopted = manager.adopt_existing()
+    assert len(adopted) == 1
+    assert adopted[0].index == 1
+
+
+# --- Services integration ---
+
+
+def test_create_with_services(
+    sample_settings: BouquetSettings,
+    tmp_git_repo: Path,
+    tmp_path: Path,
+    monkeypatch: object,
+) -> None:
+    """When services are configured, create should call setup_service_panes."""
+    state_dir = tmp_path / "state"
+    state_dir.mkdir()
+    monkeypatch.setattr(  # type: ignore[attr-defined]
+        models_mod.SessionState,
+        "state_dir",
+        classmethod(lambda cls: state_dir),
+    )
+
+    sample_settings.bootstrap.python_deps_command = ""
+    sample_settings.bootstrap.node_deps_command = ""
+    sample_settings.bootstrap.copy_env_files = []
+    sample_settings.bootstrap.use_cow_clone = False
+    sample_settings.services = [
+        ServiceConfig(name="api", command="serve --port {{ 8000 + BOUQUET_WORKTREE_INDEX }}"),
+        ServiceConfig(name="worker", command="work"),
+    ]
+    sample_settings.tmux.layout = "main-vertical"
+
+    tmux = MagicMock()
+    mock_window = MagicMock()
+    mock_window.window_id = "@1"
+    tmux.create_window.return_value = mock_window
+
+    state = SessionState(
+        project_name="test-project",
+        tmux_session_name="bouquet-test-project",
+        repo_path=tmp_git_repo,
+    )
+    state.save()
+
+    mgr = WorktreeManager(sample_settings, state, tmux)
+    info = mgr.create("feature/svc-test")
+
+    # Verify setup_service_panes was called with rendered commands
+    tmux.setup_service_panes.assert_called_once()
+    call_kwargs = tmux.setup_service_panes.call_args
+    rendered_cmds = call_kwargs.kwargs.get("service_commands") or call_kwargs[1].get("service_commands")
+    if rendered_cmds is None:
+        rendered_cmds = call_kwargs[0][1]
+    assert "serve --port 8001" in rendered_cmds
+    assert "work" in rendered_cmds
+    assert call_kwargs.kwargs.get("layout") or call_kwargs[1].get("layout") == "main-vertical"
+
+    assert info.index == 1
+
+
+def test_create_without_services_no_panes(manager: WorktreeManager) -> None:
+    """When no services configured, setup_service_panes should not be called."""
+    manager.create("feature/no-svc")
+    mock_tmux = manager.tmux
+    assert isinstance(mock_tmux, MagicMock)
+    mock_tmux.setup_service_panes.assert_not_called()

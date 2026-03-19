@@ -10,6 +10,7 @@ from bouquet import git
 from bouquet.bootstrap import bootstrap_worktree
 from bouquet.config import BouquetSettings
 from bouquet.models import SessionState, WorktreeInfo, WorktreeStatus
+from bouquet.template import render_template
 from bouquet.tmux import TmuxManager
 
 
@@ -41,6 +42,23 @@ class WorktreeManager:
         # Use the last segment of the branch for brevity
         return branch.rsplit("/", maxsplit=1)[-1]
 
+    def _allocate_index(self) -> int:
+        """Return the lowest positive integer not used by any existing worktree."""
+        used = {w.index for w in self.state.worktrees if w.index > 0}
+        idx = 1
+        while idx in used:
+            idx += 1
+        return idx
+
+    def _build_template_variables(self, info: WorktreeInfo) -> dict[str, object]:
+        """Build the context dict for template rendering."""
+        return {
+            "BOUQUET_WORKTREE_INDEX": info.index,
+            "BOUQUET_WORKTREE_BRANCH": info.branch,
+            "BOUQUET_WORKTREE_PATH": str(info.path),
+            "BOUQUET_PROJECT_NAME": self.settings.project.name,
+        }
+
     def create(self, branch: str, base_branch: str | None = None) -> WorktreeInfo:
         """Create a worktree, tmux window, bootstrap it, and launch the agent."""
         base = base_branch or self.settings.project.base_branch
@@ -59,6 +77,7 @@ class WorktreeManager:
                 created_at=datetime.now(),
             )
             self.state.worktrees.append(info)
+        info.index = self._allocate_index()
         self.state.save()
 
         try:
@@ -85,7 +104,19 @@ class WorktreeManager:
             info.tmux_window_id = window.window_id
             info.status = WorktreeStatus.ACTIVE
 
-            # 4. Launch agent command in the new window
+            # 4. Set up service panes (if any)
+            services = self.settings.services
+            if services:
+                tpl_vars = self._build_template_variables(info)
+                rendered_cmds = [render_template(svc.command, tpl_vars) for svc in services]
+                self.tmux.setup_service_panes(
+                    window=window,
+                    service_commands=rendered_cmds,
+                    start_directory=wt_path,
+                    layout=self.settings.tmux.layout,
+                )
+
+            # 5. Launch agent command in pane 0
             agent_cmd = self.settings.agent.command
             if self.settings.agent.args:
                 agent_cmd += " " + " ".join(self.settings.agent.args)
@@ -136,6 +167,7 @@ class WorktreeManager:
                 path=wt_path,
                 status=WorktreeStatus.ACTIVE,
                 created_at=datetime.now(),
+                index=self._allocate_index(),
             )
 
             # Create a tmux window for it

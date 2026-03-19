@@ -116,6 +116,39 @@ class TmuxManager:
         """Check if we're currently running inside a tmux session."""
         return "TMUX" in os.environ
 
+    def setup_service_panes(
+        self,
+        window: libtmux.Window,
+        service_commands: list[str],
+        start_directory: str | Path,
+        layout: str | None = None,
+    ) -> list[libtmux.Pane]:
+        """Split *window* into panes for each service and apply a layout.
+
+        Pane 0 (the original pane) is left for the agent.  Each service
+        gets a new pane created by splitting downward.  After all panes
+        are created the specified tmux layout is applied.
+
+        Returns the list of newly created service panes (not including pane 0).
+        """
+        panes: list[libtmux.Pane] = []
+        first_pane = window.active_pane
+        if first_pane is None:
+            raise TmuxError("Window has no active pane")
+
+        for cmd in service_commands:
+            new_pane = first_pane.split(
+                direction=libtmux.constants.PaneDirection.Below,
+                start_directory=str(start_directory),
+            )
+            new_pane.send_keys(cmd, enter=True)
+            panes.append(new_pane)
+
+        if layout:
+            window.select_layout(layout)
+
+        return panes
+
     def attach_session(self, session_name: str) -> None:
         """Attach to a tmux session (replaces current process)."""
         tmux_bin = shutil.which("tmux")
