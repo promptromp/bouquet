@@ -181,8 +181,13 @@ class TmuxManager:
         """Split *window* into panes for each service and apply a layout.
 
         Pane 0 (the original pane) is left for the agent.  Each service
-        gets a new pane created by splitting downward.  After all panes
-        are created the specified tmux layout is applied.
+        gets a new pane created by splitting.  After all panes are created
+        the specified tmux layout is applied.
+
+        The special layout ``"services-top"`` arranges service panes in a
+        horizontal row across the top of the window with the agent pane
+        spanning the full width at the bottom (~60% height).  Any other
+        value is passed to ``select_layout`` as a standard tmux layout.
 
         Returns the list of newly created service panes (not including pane 0).
         """
@@ -191,16 +196,60 @@ class TmuxManager:
         if first_pane is None:
             raise TmuxError("Window has no active pane")
 
-        for cmd in service_commands:
-            new_pane = first_pane.split(
-                direction=libtmux.constants.PaneDirection.Below,
+        if layout == "services-top":
+            panes = self._setup_services_top(first_pane, service_commands, start_directory)
+        else:
+            for cmd in service_commands:
+                new_pane = first_pane.split(
+                    direction=libtmux.constants.PaneDirection.Below,
+                    start_directory=str(start_directory),
+                )
+                new_pane.send_keys(cmd, enter=True)
+                panes.append(new_pane)
+
+            if layout:
+                window.select_layout(layout)
+
+        return panes
+
+    @staticmethod
+    def _setup_services_top(
+        agent_pane: libtmux.Pane,
+        service_commands: list[str],
+        start_directory: str | Path,
+    ) -> list[libtmux.Pane]:
+        """Create service panes in a row above the agent pane.
+
+        Splits the agent pane horizontally, putting the first service above
+        it (~40% top / 60% bottom).  Then splits the service area vertically
+        into equal-width panes for each additional service.
+        """
+        panes: list[libtmux.Pane] = []
+        n = len(service_commands)
+
+        # First service: split above the agent pane (agent keeps 60%)
+        first_svc = agent_pane.split(
+            direction=libtmux.constants.PaneDirection.Above,
+            start_directory=str(start_directory),
+            size="40%",
+        )
+        first_svc.send_keys(service_commands[0], enter=True)
+        panes.append(first_svc)
+
+        # Remaining services: split the previous service pane to the right,
+        # dividing the space evenly.
+        prev = first_svc
+        for j, cmd in enumerate(service_commands[1:], start=1):
+            remaining = n - j
+            pct = round(100 * remaining / (remaining + 1))
+            new_pane = prev.split(
+                direction=libtmux.constants.PaneDirection.Right,
                 start_directory=str(start_directory),
+                size=f"{pct}%",
             )
             new_pane.send_keys(cmd, enter=True)
             panes.append(new_pane)
-
-        if layout:
-            window.select_layout(layout)
+            prev = new_pane
 
         return panes
 

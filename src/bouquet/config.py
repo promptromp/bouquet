@@ -160,7 +160,8 @@ direnv_allow = true
 
 [tmux]
 session_prefix = "bouquet"
-# layout = "main-vertical"   # tmux layout: main-vertical, tiled, even-horizontal, etc.
+# layout = "services-top"    # services in a row on top, agent at bottom (recommended)
+#                            # or any tmux layout: main-vertical, tiled, even-horizontal, etc.
 
 # ---------------------------------------------------------------------------
 # Services — optional processes to run alongside the agent in each worktree.
