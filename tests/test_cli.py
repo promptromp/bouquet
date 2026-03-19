@@ -101,7 +101,7 @@ def test_stop_no_args_no_config_errors(tmp_path: Path) -> None:
 def _make_git_repo(path: Path) -> Path:
     """Create a minimal git repo with an initial commit."""
     path.mkdir(parents=True)
-    subprocess.run(["git", "init"], cwd=path, capture_output=True, check=True)
+    subprocess.run(["git", "init", "-b", "main"], cwd=path, capture_output=True, check=True)
     subprocess.run(["git", "config", "user.email", "t@t.com"], cwd=path, capture_output=True, check=True)
     subprocess.run(["git", "config", "user.name", "T"], cwd=path, capture_output=True, check=True)
     (path / "README.md").write_text("# test\n")
