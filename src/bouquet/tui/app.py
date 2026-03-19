@@ -16,7 +16,7 @@ from textual.widgets import Footer, Static
 from bouquet.config import BouquetSettings, load_config
 from bouquet.models import SessionState
 from bouquet.tmux import TmuxManager
-from bouquet.tui.screens import NewWorktreeScreen
+from bouquet.tui.screens import ConfirmQuitScreen, NewWorktreeScreen
 from bouquet.tui.widgets import ProjectHeader, WorktreeTable
 from bouquet.worktree import WorktreeManager
 
@@ -112,6 +112,17 @@ class OrchestratorApp(App):
             self.call_from_thread(self.notify, f"Worktree '{branch}' removed")
         except Exception as e:
             self.call_from_thread(self.notify, f"Error removing worktree: {e}", severity="error")
+
+    async def action_quit(self) -> None:
+        """Show confirmation dialog before quitting."""
+
+        def on_result(confirmed: bool | None) -> None:
+            if confirmed:
+                # Kill the tmux session (leaves git worktrees in place)
+                self.manager.tmux.kill_session(self.session_state.tmux_session_name)
+                self.exit()
+
+        self.push_screen(ConfirmQuitScreen(), callback=on_result)
 
     def action_refresh(self) -> None:
         """Refresh the worktree table."""
