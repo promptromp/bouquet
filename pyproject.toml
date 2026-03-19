@@ -2,7 +2,7 @@
 name = "bouquet"
 version = "0.1.0"
 description = "An orchestration layer for agentic coding"
-requires-python = ">=3.12"
+requires-python = ">=3.14"
 dependencies = [
     "click>=8.1",
     "libtmux>=0.37",
@@ -26,13 +26,13 @@ asyncio_mode = "auto"
 testpaths = ["tests"]
 
 [tool.mypy]
-python_version = "3.12"
+python_version = "3.14"
 ignore_missing_imports = true
 plugins = ["pydantic.mypy"]
 
 [tool.ruff]
 line-length = 120
-target-version = "py312"
+target-version = "py314"
 
 [tool.ruff.lint]
 select = [
