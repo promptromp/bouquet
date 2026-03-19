@@ -248,15 +248,14 @@ class BroadcastResultsScreen(ModalScreen[None]):
             with VerticalScroll(id="results-scroll"):
                 for resp in self._responses:
                     branch = resp.worktree_branch or "unknown"
+                    duration = f"{resp.duration_ms / 1000:.1f}s" if resp.duration_ms else "?"
+                    cost = f"  ${resp.cost_usd:.4f}" if resp.cost_usd else ""
                     if resp.ok:
-                        yield Static(f"── {branch} ──", classes="result-branch")
+                        yield Static(f"[{branch}] ({duration}{cost})", classes="result-branch")
                         yield Static(resp.result[:2000] if resp.result else "(empty response)", classes="result-body")
                     else:
-                        yield Static(f"── {branch} ── ERROR", classes="result-error")
+                        yield Static(f"[{branch}] ERROR ({duration}{cost})", classes="result-error")
                         yield Static(resp.error or "Unknown error", classes="result-body")
-                    duration = f"{resp.duration_ms / 1000:.1f}s" if resp.duration_ms else "?"
-                    cost = f" ${resp.cost_usd:.4f}" if resp.cost_usd else ""
-                    yield Static(f"  [{branch}] {duration}{cost}", classes="result-meta")
             yield Button("Close", variant="primary", id="close-btn")
 
     def on_button_pressed(self, event: Button.Pressed) -> None:
