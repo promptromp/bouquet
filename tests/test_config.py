@@ -45,9 +45,9 @@ def test_default_services_empty() -> None:
     assert settings.services == []
 
 
-def test_default_layout_none() -> None:
+def test_default_layout_services_top() -> None:
     settings = BouquetSettings()
-    assert settings.tmux.layout is None
+    assert settings.tmux.layout == "services-top"
 
 
 def test_default_agent_profiles_empty() -> None:

@@ -61,7 +61,7 @@ class ServiceConfig(BaseModel):
 
 class TmuxConfig(BaseModel):
     session_prefix: str = "bouquet"
-    layout: str | None = None
+    layout: str | None = "services-top"
 
 
 class BouquetSettings(BaseSettings):
@@ -160,8 +160,8 @@ direnv_allow = true
 
 [tmux]
 session_prefix = "bouquet"
-# layout = "services-top"    # services in a row on top, agent at bottom (recommended)
-#                            # or any tmux layout: main-vertical, tiled, even-horizontal, etc.
+layout = "services-top"      # services in a row on top, agent at bottom (default)
+# layout = "main-vertical"   # or any tmux layout: main-vertical, tiled, even-horizontal, etc.
 
 # ---------------------------------------------------------------------------
 # Services — optional processes to run alongside the agent in each worktree.

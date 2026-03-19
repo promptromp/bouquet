@@ -53,6 +53,8 @@ CLI (Click) → bouquet start/stop/init (args optional, infers from cwd + .bouqu
 - **Activity polling** — `ActivityMonitor` runs every 2s in the TUI via `set_interval` + `@work(thread=True)`. SHA256 hashing of pane content; hash change → RUNNING, stable 3+ polls → IDLE (or WAITING if a permission prompt is detected).
 - **Agent profiles** — `AgentConfig.resolve_profile(name)` resolves a named profile or falls back to the top-level `command`/`args`. Backward-compatible: old configs without `profiles` work unchanged.
 - **Bootstrap setup commands** — `BootstrapConfig.setup_commands` runs shell commands in a single bash context before dependency installation. Env vars exported by these commands are captured (via a `python3` JSON dump to a temp file — portable across macOS/Linux) and propagated to deps install subprocesses and the tmux session (via `set_environment`). Use case: private registry auth (e.g. AWS CodeArtifact tokens).
+- **Bootstrap python_version** — Optional `BootstrapConfig.python_version` runs `uv python pin <version>` in the worktree before dependency installation. Ensures consistent Python version across worktrees regardless of what's available on the system.
+- **services-top layout** — Default tmux layout (`TmuxConfig.layout = "services-top"`). Arranges service panes in an equal-width horizontal row across the top (~40%) with the agent pane spanning full width at the bottom (~60%). Implemented via custom splits in `TmuxManager._setup_services_top()`, not a tmux built-in layout. Any other layout value is passed through to `select_layout` as a standard tmux layout name.
 
 ## Configuration
 
