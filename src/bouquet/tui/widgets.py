@@ -3,16 +3,17 @@
 from __future__ import annotations
 
 from rich.text import Text
-from textual.widgets import DataTable, Static
+from textual.app import ComposeResult
+from textual.widgets import DataTable, Static, TabbedContent, TabPane
 
 from bouquet.models import WorktreeInfo, WorktreeStatus
 
 
 class ProjectHeader(Static):
-    """Displays the project name in the header area."""
+    """Displays the app name and project name in the header area."""
 
     def __init__(self, project_name: str) -> None:
-        super().__init__(f"Bouquet - {project_name}")
+        super().__init__(f"[bold italic]bouquet[/bold italic] [dim]//[/dim] {project_name}")
         self.add_class("project-header")
 
 
@@ -53,3 +54,25 @@ class WorktreeTable(DataTable):
                 created,
                 key=wt.branch,
             )
+
+
+class DetailTabs(TabbedContent):
+    """Tabbed panel on the right side of the orchestrator."""
+
+    def compose(self) -> ComposeResult:
+        with TabPane("Task Queue", id="tab-task-queue"):
+            yield Static(
+                "No tasks in queue.",
+                id="task-queue-empty",
+            )
+
+
+class TaskQueueTable(DataTable):
+    """Table for displaying queued tasks (placeholder for future implementation)."""
+
+    def __init__(self) -> None:
+        super().__init__(cursor_type="row")
+        self.add_class("task-queue-table")
+
+    def on_mount(self) -> None:
+        self.add_columns("Task", "Branch", "Status")

@@ -12,7 +12,7 @@ import click
 from textual import work
 from textual.app import App, ComposeResult
 from textual.binding import Binding
-from textual.containers import Vertical
+from textual.containers import Horizontal, Vertical
 from textual.widgets import Footer, Static
 
 from bouquet.activity import POLLABLE_STATUSES, ActivityMonitor
@@ -26,7 +26,7 @@ from bouquet.tui.screens import (
     NewWorktreeScreen,
     SendPromptScreen,
 )
-from bouquet.tui.widgets import ProjectHeader, WorktreeTable
+from bouquet.tui.widgets import DetailTabs, ProjectHeader, WorktreeTable
 from bouquet.worktree import WorktreeManager
 
 
@@ -77,9 +77,16 @@ class OrchestratorApp(App):
 
     def compose(self) -> ComposeResult:
         yield ProjectHeader(self.settings.project.name)
-        with Vertical(id="body"):
-            yield Static("Active Worktrees", id="section-title")
-            yield WorktreeTable()
+        with Horizontal(id="body"):
+            with Vertical(id="left-panel"):
+                yield Static("Worktrees", id="section-title")
+                yield WorktreeTable()
+                yield Static(
+                    "No worktrees yet. Press [bold]n[/bold] to create one.",
+                    id="empty-state",
+                )
+            with Vertical(id="right-panel"):
+                yield DetailTabs()
         yield Footer()
 
     def on_mount(self) -> None:
@@ -88,7 +95,11 @@ class OrchestratorApp(App):
 
     def _refresh_table(self) -> None:
         table = self.query_one(WorktreeTable)
-        table.refresh_worktrees(self.manager.list_active())
+        worktrees = self.manager.list_active()
+        table.refresh_worktrees(worktrees)
+        empty = self.query_one("#empty-state", Static)
+        empty.display = not worktrees
+        table.display = bool(worktrees)
 
     def _sendable_worktrees(self) -> list[WorktreeInfo]:
         """Return worktrees that have a tmux window and are in a pollable state."""

@@ -6,14 +6,23 @@ Screen {
     dock: top;
     height: 3;
     content-align: center middle;
-    background: $accent;
+    background: $primary-background;
     color: $text;
-    text-style: bold;
     padding: 1;
 }
 
 #body {
     height: 1fr;
+}
+
+#left-panel {
+    width: 1fr;
+    padding: 1 2;
+    border-right: tall $accent;
+}
+
+#right-panel {
+    width: 1fr;
     padding: 1 2;
 }
 
@@ -23,6 +32,22 @@ Screen {
 }
 
 .worktree-table {
+    height: 1fr;
+}
+
+#empty-state {
+    height: 1fr;
+    content-align: center middle;
+    color: $text-muted;
+}
+
+#task-queue-empty {
+    height: 1fr;
+    content-align: center middle;
+    color: $text-muted;
+}
+
+.task-queue-table {
     height: 1fr;
 }
 
