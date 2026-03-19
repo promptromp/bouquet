@@ -7,20 +7,11 @@ from textual.widgets import DataTable, Static
 from bouquet.models import WorktreeInfo, WorktreeStatus
 
 
-_LOGO = (
-    " _                       _\n"
-    "| |_ ___ _ _ ___ _ _ ___| |_\n"
-    "| . | . | | | . | | | -_|  _|\n"
-    "|___|___|___|_  |___|___|_|\n"
-    "              |_|"
-)
-
-
 class ProjectHeader(Static):
-    """Displays the ASCII logo and project name in the header area."""
+    """Displays the project name in the header area."""
 
     def __init__(self, project_name: str) -> None:
-        super().__init__(f"{_LOGO}\n{project_name}")
+        super().__init__(f"Bouquet - {project_name}")
         self.add_class("project-header")
 
 
