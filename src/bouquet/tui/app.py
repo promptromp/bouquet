@@ -21,7 +21,6 @@ from bouquet.config import BouquetSettings, load_config
 from bouquet.models import SessionState, WorktreeInfo, WorktreeStatus
 from bouquet.tmux import TmuxManager
 from bouquet.tui.screens import (
-    BroadcastInputScreen,
     BroadcastResultsScreen,
     ConfirmQuitScreen,
     NewWorktreeScreen,
@@ -56,9 +55,8 @@ class OrchestratorApp(App):
         Binding("n", "new_worktree", "New worktree"),
         Binding("s", "switch_worktree", "Switch to window"),
         Binding("d", "delete_worktree", "Delete worktree"),
-        Binding("b", "broadcast", "Broadcast"),
-        Binding("t", "status", "Status"),
         Binding("p", "send_prompt", "Send prompt"),
+        Binding("t", "status", "Status"),
         Binding("r", "refresh", "Refresh"),
         Binding("q", "quit", "Quit"),
     ]
@@ -75,6 +73,7 @@ class OrchestratorApp(App):
         self.manager = manager
         self._activity_monitor = ActivityMonitor(manager.tmux)
         self._polling = False
+        self._send_to_all = False
 
     def compose(self) -> ComposeResult:
         yield ProjectHeader(self.settings.project.name)
@@ -206,41 +205,6 @@ class OrchestratorApp(App):
             self.call_from_thread(self._refresh_table)
             self.call_from_thread(self.notify, f"Error removing worktree: {e}", severity="error")
 
-    # --- Broadcast (send-keys to all agents) ---
-
-    def action_broadcast(self) -> None:
-        """Open a dialog to broadcast a prompt to all agents."""
-
-        def on_prompt(prompt: str | None) -> None:
-            if prompt:
-                self._run_broadcast(prompt)
-
-        self.push_screen(BroadcastInputScreen(), callback=on_prompt)
-
-    @work(thread=True)
-    def _run_broadcast(self, prompt: str) -> None:
-        """Send *prompt* to all active agents via tmux send-keys."""
-        targets = self._sendable_worktrees()
-        if not targets:
-            self.call_from_thread(self.notify, "No active worktrees", severity="warning")
-            return
-
-        errors = 0
-        for wt in targets:
-            try:
-                self.manager.tmux.send_keys_to_window_id(
-                    self.session_state.tmux_session_name,
-                    wt.tmux_window_id,  # type: ignore[arg-type]
-                    prompt,
-                )
-            except Exception as e:
-                self.call_from_thread(self.notify, f"Error sending to {wt.branch}: {e}", severity="error")
-                errors += 1
-
-        sent = len(targets) - errors
-        if sent > 0:
-            self.call_from_thread(self.notify, f"Sent to {sent} agent(s)")
-
     # --- Status (send-keys + capture pane responses) ---
 
     def action_status(self) -> None:
@@ -347,9 +311,13 @@ class OrchestratorApp(App):
         def on_result(result: tuple[str, bool] | None) -> None:
             if result is not None:
                 prompt, send_to_all = result
+                self._send_to_all = send_to_all  # remember for next invocation
                 self._send_prompt_to_agents(prompt, send_to_all, selected_branch)
 
-        self.push_screen(SendPromptScreen(selected_branch=selected_branch), callback=on_result)
+        self.push_screen(
+            SendPromptScreen(selected_branch=selected_branch, default_send_all=self._send_to_all),
+            callback=on_result,
+        )
 
     def _send_prompt_to_agents(self, prompt: str, send_to_all: bool, selected_branch: str | None) -> None:
         """Send a prompt via tmux send-keys to one or all agent terminals."""

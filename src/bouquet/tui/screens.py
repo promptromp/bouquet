@@ -140,70 +140,6 @@ class NewWorktreeScreen(ModalScreen[tuple[str, str, str | None] | None]):
             self.query_one("#create-btn", Button).press()
 
 
-class BroadcastInputScreen(ModalScreen[str | None]):
-    """Modal dialog to enter a message to broadcast to all agents."""
-
-    CSS = """
-    BroadcastInputScreen {
-        align: center middle;
-    }
-
-    #broadcast-dialog {
-        width: 80;
-        height: auto;
-        padding: 1 2;
-        border: thick $accent;
-        background: $surface;
-    }
-
-    #broadcast-dialog Label {
-        margin-bottom: 1;
-    }
-
-    #broadcast-dialog Input {
-        margin-bottom: 1;
-    }
-
-    .button-row {
-        layout: horizontal;
-        height: auto;
-        margin-top: 1;
-    }
-
-    .button-row Button {
-        margin-right: 1;
-    }
-    """
-
-    def __init__(self, default_prompt: str = "") -> None:
-        super().__init__()
-        self._default_prompt = default_prompt
-
-    def compose(self) -> ComposeResult:
-        with Vertical(id="broadcast-dialog"):
-            yield Label("Broadcast to All Agents")
-            yield Label("This will send a prompt to all active agent terminals.")
-            yield Label("Prompt:")
-            yield Input(
-                value=self._default_prompt,
-                placeholder="e.g. Summarize your current progress",
-                id="prompt-input",
-            )
-            with Vertical(classes="button-row"):
-                yield Button("Send", variant="primary", id="send-btn")
-                yield Button("Cancel", variant="default", id="cancel-btn")
-
-    def on_button_pressed(self, event: Button.Pressed) -> None:
-        if event.button.id == "send-btn":
-            prompt = self.query_one("#prompt-input", Input).value.strip()
-            self.dismiss(prompt if prompt else None)
-        else:
-            self.dismiss(None)
-
-    def on_input_submitted(self, event: Input.Submitted) -> None:
-        self.query_one("#send-btn", Button).press()
-
-
 class BroadcastResultsScreen(ModalScreen[None]):
     """Display results from a broadcast to all agents."""
 
@@ -317,9 +253,10 @@ class SendPromptScreen(ModalScreen[tuple[str, bool] | None]):
     }
     """
 
-    def __init__(self, selected_branch: str | None = None) -> None:
+    def __init__(self, selected_branch: str | None = None, default_send_all: bool = False) -> None:
         super().__init__()
         self._selected_branch = selected_branch
+        self._default_send_all = default_send_all
 
     def compose(self) -> ComposeResult:
         with Vertical(id="send-prompt-dialog"):
@@ -328,7 +265,7 @@ class SendPromptScreen(ModalScreen[tuple[str, bool] | None]):
             yield Label("Prompt:")
             yield Input(placeholder="e.g. Fix the failing test", id="prompt-input")
             with Horizontal(classes="toggle-row"):
-                yield Switch(value=False, id="all-switch")
+                yield Switch(value=self._default_send_all, id="all-switch")
                 yield Label("Send to all worktrees", classes="toggle-label")
             if self._selected_branch:
                 yield Label(f"Selected: {self._selected_branch}", id="target-label")

@@ -86,9 +86,8 @@ bouquet start my-project --repo /path/to/repo --config /path/to/.bouquet.toml
 | `N` | Create a new worktree (opens branch dialog with optional agent profile selector) |
 | `S` / `Enter` | Switch to the selected worktree's window |
 | `D` | Delete the selected worktree and its window |
-| `B` | Broadcast a prompt to all agents via `claude -p` (headless) |
-| `T` | Request a status summary from all agents |
-| `P` | Send a prompt directly into agent terminal(s) via tmux send-keys |
+| `P` | Send a prompt to selected or all agent terminal(s) via tmux send-keys |
+| `T` | Request a status summary from all agents (captures responses) |
 | `R` | Refresh the worktree list |
 | `Q` | Quit (with confirmation — kills the session) |
 
