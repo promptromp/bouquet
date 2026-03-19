@@ -1,4 +1,4 @@
-"""Bootstrap a worktree: copy env files, clone virtualenvs, install deps."""
+"""Bootstrap a worktree: copy env files, install deps, configure direnv."""
 
 from __future__ import annotations
 
@@ -52,6 +52,20 @@ def _cow_clone(src: Path, dst: Path) -> bool:
     return False
 
 
+def _direnv_allow(worktree_path: Path) -> None:
+    """Run `direnv allow` in the worktree if an .envrc exists."""
+    envrc = worktree_path / ".envrc"
+    if not envrc.exists():
+        return
+    with contextlib.suppress(FileNotFoundError):
+        subprocess.run(
+            ["direnv", "allow"],
+            cwd=worktree_path,
+            capture_output=True,
+            check=False,
+        )
+
+
 def bootstrap_worktree(
     repo_path: Path,
     worktree_path: Path,
@@ -62,27 +76,25 @@ def bootstrap_worktree(
     """Bootstrap a newly created worktree.
 
     1. Copy environment files from the main repo
-    2. CoW-clone virtualenv / node_modules if enabled
+    2. CoW-clone node_modules if enabled (skip .venv — it contains
+       hardcoded paths that break in a new location; let the deps
+       command create a fresh venv instead)
     3. Run dependency install commands
+    4. Allow direnv if configured
     """
-    # 1. Copy env files
+    # 1. Copy env files (.env, .env.local, .envrc, etc.)
     for env_file in config.copy_env_files:
         src = repo_path / env_file
         _copy_file(src, worktree_path / env_file)
 
-    # 2. CoW clone dependency directories
-    if config.use_cow_clone:
-        if python:
-            venv_src = repo_path / ".venv"
-            venv_dst = worktree_path / ".venv"
-            if venv_src.exists() and not venv_dst.exists():
-                _cow_clone(venv_src, venv_dst)
-
-        if javascript:
-            nm_src = repo_path / "node_modules"
-            nm_dst = worktree_path / "node_modules"
-            if nm_src.exists() and not nm_dst.exists():
-                _cow_clone(nm_src, nm_dst)
+    # 2. CoW clone node_modules only (not .venv — venvs have hardcoded
+    #    absolute paths in pyvenv.cfg and activation scripts that break
+    #    when relocated; `uv sync` recreates them correctly and fast)
+    if config.use_cow_clone and javascript:
+        nm_src = repo_path / "node_modules"
+        nm_dst = worktree_path / "node_modules"
+        if nm_src.exists() and not nm_dst.exists():
+            _cow_clone(nm_src, nm_dst)
 
     # 3. Run dependency install commands
     if python and config.python_deps_command:
@@ -102,3 +114,7 @@ def bootstrap_worktree(
                 capture_output=True,
                 check=False,
             )
+
+    # 4. Allow direnv
+    if config.direnv_allow:
+        _direnv_allow(worktree_path)
