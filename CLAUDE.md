@@ -23,16 +23,17 @@ Pre-commit hooks run on every commit: ruff check+format, mypy (with pydantic plu
 Bouquet is an orchestration layer for multi-agent coding that composes four concerns:
 
 ```
-CLI (Click) → bouquet start/stop/init
+CLI (Click) → bouquet start/stop/init (args optional, infers from cwd + .bouquet.toml)
   └─► WorktreeManager (worktree.py — glue layer)
        ├─► git.py         subprocess calls for worktree CRUD
-       ├─► tmux.py        libtmux wrapper for session/window lifecycle
+       ├─► tmux.py        libtmux wrapper for session/window/pane lifecycle
+       ├─► template.py    safe {{ expr }} rendering for service commands
        ├─► bootstrap.py   env file copy, CoW clone .venv/node_modules, dep install
        └─► TUI (tui/app.py — Textual app in tmux window 0)
             └─► spawns worktree windows via WorktreeManager
 ```
 
-**Key flow:** `bouquet start` creates a tmux session, launches the TUI in window 0, then the TUI drives `WorktreeManager.create()` which chains git worktree creation → bootstrap → tmux window → agent launch via `send_keys`.
+**Key flow:** `bouquet start` creates a tmux session, launches the TUI in window 0, then the TUI drives `WorktreeManager.create()` which chains git worktree creation → bootstrap → tmux window → service pane setup → agent launch via `send_keys`.
 
 **The TUI runs inside tmux** but controls tmux via libtmux's server socket API (no terminal conflict). Switching to a worktree window hides the TUI; return with `Ctrl-b 0`.
 
@@ -43,6 +44,9 @@ CLI (Click) → bouquet start/stop/init
 - **State persists to `~/.local/state/bouquet/{project}.json`** so `bouquet stop` can clean up even if the TUI crashes.
 - **Bootstrap errors are suppressed** (`contextlib.suppress`) — partial setup is acceptable when tools are missing.
 - **Worktree paths** are computed as `{repo_parent}/.bouquet-worktrees/{branch-with-slashes-replaced}`.
+- **Worktree indices** are slot-based with reuse (lowest unused positive int). Stored in `WorktreeInfo.index`. Used for port offsetting in service templates.
+- **Template engine** (`template.py`) uses `ast.parse` with a whitelist of safe nodes — no Jinja2 dependency. Only arithmetic on known variables is allowed.
+- **CLI args are optional** — `bouquet start`/`stop` default to cwd as repo and read project name from `.bouquet.toml`. Errors clearly if not in a git repo or no config found.
 
 ## Configuration
 
@@ -60,4 +64,11 @@ Config search order: `--config` flag → `.bouquet.toml` in repo root → `~/.co
 - `tmp_git_repo` fixture creates a real git repo with initial commit in a temp dir
 - `mock_tmux` fixture (MagicMock) avoids real tmux dependency in WorktreeManager tests
 - Tests that monkeypatch `SessionState.state_dir` redirect state persistence to temp dirs
+- CLI tests use Click's `CliRunner` with mocked `TmuxManager` — no real tmux needed
 - No interactive tmux or TUI rendering tests — TUI is tested at widget/data level only
+
+## Important Instructions
+
+- **Update docs after major changes.** After adding or changing functionality, check if README.md, CLAUDE.md, and docs/ need updating. Keep usage examples, architecture diagrams, and design decisions current.
+- **No backward compatibility shims.** Do not add compatibility wrappers, re-exports, renamed-but-kept-around variables, or `# removed` comments unless explicitly asked. If something is unused, delete it.
+- **Add tests with new functionality.** When adding new features or modifying behavior, add or update unit tests to cover the changes. Check existing test files for patterns to follow.
