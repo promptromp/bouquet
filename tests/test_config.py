@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from bouquet.config import BouquetSettings, load_config
+from bouquet.config import AgentProfile, BouquetSettings, load_config
 
 
 def test_default_settings() -> None:
@@ -48,6 +48,79 @@ def test_default_services_empty() -> None:
 def test_default_layout_none() -> None:
     settings = BouquetSettings()
     assert settings.tmux.layout is None
+
+
+def test_default_agent_profiles_empty() -> None:
+    settings = BouquetSettings()
+    assert settings.agent.profiles == []
+    assert settings.agent.default_profile == "claude"
+
+
+def test_resolve_profile_with_defined_profiles() -> None:
+    settings = BouquetSettings()
+    settings.agent.profiles = [
+        AgentProfile(name="claude", command="claude"),
+        AgentProfile(name="aider", command="aider", args=["--model", "sonnet"]),
+    ]
+    profile = settings.agent.resolve_profile("aider")
+    assert profile.name == "aider"
+    assert profile.command == "aider"
+    assert profile.args == ["--model", "sonnet"]
+
+
+def test_resolve_profile_fallback_to_command_args() -> None:
+    settings = BouquetSettings()
+    settings.agent.command = "claude"
+    settings.agent.args = ["--verbose"]
+    # No profiles defined — should synthesize from command/args
+    profile = settings.agent.resolve_profile()
+    assert profile.command == "claude"
+    assert profile.args == ["--verbose"]
+
+
+def test_resolve_profile_default() -> None:
+    settings = BouquetSettings()
+    settings.agent.profiles = [
+        AgentProfile(name="claude", command="claude"),
+        AgentProfile(name="aider", command="aider"),
+    ]
+    settings.agent.default_profile = "claude"
+    profile = settings.agent.resolve_profile()
+    assert profile.name == "claude"
+
+
+def test_resolve_profile_unknown_name_falls_back() -> None:
+    settings = BouquetSettings()
+    settings.agent.command = "claude"
+    profile = settings.agent.resolve_profile("nonexistent")
+    assert profile.name == "default"
+    assert profile.command == "claude"
+
+
+def test_profiles_from_toml(tmp_git_repo: Path) -> None:
+    config = tmp_git_repo / ".bouquet.toml"
+    config.write_text("""\
+[project]
+name = "profile-test"
+
+[agent]
+command = "claude"
+default_profile = "aider"
+
+[[agent.profiles]]
+name = "claude"
+command = "claude"
+
+[[agent.profiles]]
+name = "aider"
+command = "aider"
+args = ["--model", "sonnet"]
+""")
+    settings = load_config(repo_path=tmp_git_repo)
+    assert len(settings.agent.profiles) == 2
+    assert settings.agent.default_profile == "aider"
+    assert settings.agent.profiles[1].name == "aider"
+    assert settings.agent.profiles[1].args == ["--model", "sonnet"]
 
 
 def test_services_from_toml(tmp_git_repo: Path) -> None:

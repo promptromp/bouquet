@@ -64,11 +64,11 @@ def test_create_worktree(manager: WorktreeManager) -> None:
     assert info.path.exists()
     assert info.tmux_window_id == "@1"
 
-    # Verify tmux interactions
+    # Verify tmux interactions — uses window-ID-based send_keys
     mock_tmux = manager.tmux
     assert isinstance(mock_tmux, MagicMock)
     mock_tmux.create_window.assert_called_once()
-    mock_tmux.send_keys.assert_called_once()
+    mock_tmux.send_keys_to_window_id.assert_called_once()
 
 
 def test_remove_worktree(manager: WorktreeManager) -> None:
@@ -91,7 +91,7 @@ def test_list_active(manager: WorktreeManager) -> None:
 
 
 def test_adopt_existing(manager: WorktreeManager, tmp_git_repo: Path) -> None:
-    """adopt_existing should discover pre-existing git worktrees."""
+    """adopt_existing should fully initialise adopted worktrees (window + agent)."""
     # Create a worktree outside of bouquet (simulating manual creation)
     wt_path = tmp_git_repo.parent / "manual-worktree"
     git_create_worktree(tmp_git_repo, wt_path, "feature/manual", "main")
@@ -106,6 +106,11 @@ def test_adopt_existing(manager: WorktreeManager, tmp_git_repo: Path) -> None:
 
     # Should now appear in list_active
     assert len(manager.list_active()) == 1
+
+    # Verify agent was launched in the adopted worktree
+    mock_tmux = manager.tmux
+    assert isinstance(mock_tmux, MagicMock)
+    mock_tmux.send_keys_to_window_id.assert_called_once()
 
 
 def test_adopt_existing_skips_main_worktree(manager: WorktreeManager) -> None:
@@ -225,3 +230,57 @@ def test_create_without_services_no_panes(manager: WorktreeManager) -> None:
     mock_tmux = manager.tmux
     assert isinstance(mock_tmux, MagicMock)
     mock_tmux.setup_service_panes.assert_not_called()
+
+
+# --- Window name bug fix ---
+
+
+def test_window_name_replaces_slashes(manager: WorktreeManager) -> None:
+    """_window_name should use the full branch with / replaced by -."""
+    assert manager._window_name("feature/auth") == "feature-auth"
+    assert manager._window_name("bugfix/auth") == "bugfix-auth"
+    assert manager._window_name("simple") == "simple"
+
+
+def test_window_name_uniqueness(manager: WorktreeManager) -> None:
+    """Different prefixes with the same suffix should produce different names."""
+    assert manager._window_name("feature/auth") != manager._window_name("bugfix/auth")
+
+
+# --- Agent profile ---
+
+
+def test_create_with_agent_profile(manager: WorktreeManager) -> None:
+    """create() should store agent_profile on WorktreeInfo."""
+    info = manager.create("feature/profile-test", agent_profile="aider")
+    assert info.agent_profile == "aider"
+
+
+def test_create_without_agent_profile(manager: WorktreeManager) -> None:
+    """create() without profile should default to None."""
+    info = manager.create("feature/no-profile")
+    assert info.agent_profile is None
+
+
+# --- Window-ID-based operations ---
+
+
+def test_remove_uses_window_id(manager: WorktreeManager) -> None:
+    """remove() should use kill_window_by_id when window_id is available."""
+    manager.create("feature/rm-by-id")
+    mock_tmux = manager.tmux
+    assert isinstance(mock_tmux, MagicMock)
+    mock_tmux.kill_window_by_id.reset_mock()
+
+    manager.remove("feature/rm-by-id")
+    mock_tmux.kill_window_by_id.assert_called_once()
+
+
+def test_switch_to_uses_window_id(manager: WorktreeManager) -> None:
+    """switch_to() should use switch_to_window_by_id when window_id is available."""
+    manager.create("feature/switch-by-id")
+    mock_tmux = manager.tmux
+    assert isinstance(mock_tmux, MagicMock)
+
+    manager.switch_to("feature/switch-by-id")
+    mock_tmux.switch_to_window_by_id.assert_called()

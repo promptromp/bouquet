@@ -38,9 +38,12 @@ class WorktreeManager:
         return self.repo_path.parent / ".bouquet-worktrees" / safe_name
 
     def _window_name(self, branch: str) -> str:
-        """Compute a tmux window name for a branch."""
-        # Use the last segment of the branch for brevity
-        return branch.rsplit("/", maxsplit=1)[-1]
+        """Compute a tmux window name for a branch.
+
+        Uses the full branch name with ``/`` replaced by ``-`` so that
+        ``feature/auth`` and ``bugfix/auth`` produce distinct names.
+        """
+        return branch.replace("/", "-")
 
     def _allocate_index(self) -> int:
         """Return the lowest positive integer not used by any existing worktree."""
@@ -59,7 +62,63 @@ class WorktreeManager:
             "BOUQUET_PROJECT_NAME": self.settings.project.name,
         }
 
-    def create(self, branch: str, base_branch: str | None = None) -> WorktreeInfo:
+    def _setup_window(self, info: WorktreeInfo) -> None:
+        """Bootstrap worktree, create tmux window with services, and launch agent.
+
+        Assumes the git worktree already exists at ``info.path``.  Mutates
+        *info* in place (sets ``tmux_window_id`` and ``status``).
+        """
+        wt_path = info.path
+
+        # 1. Bootstrap the worktree
+        bootstrap_worktree(
+            repo_path=self.repo_path,
+            worktree_path=wt_path,
+            config=self.settings.bootstrap,
+            python=self.settings.project.languages.python,
+            javascript=self.settings.project.languages.javascript,
+        )
+
+        # 2. Create tmux window
+        win_name = self._window_name(info.branch)
+        window = self.tmux.create_window(
+            session_name=self.session_name,
+            window_name=win_name,
+            start_directory=wt_path,
+        )
+        info.tmux_window_id = window.window_id
+        info.status = WorktreeStatus.ACTIVE
+
+        # 3. Set up service panes (if any)
+        services = self.settings.services
+        if services:
+            tpl_vars = self._build_template_variables(info)
+            rendered_cmds = [render_template(svc.command, tpl_vars) for svc in services]
+            self.tmux.setup_service_panes(
+                window=window,
+                service_commands=rendered_cmds,
+                start_directory=wt_path,
+                layout=self.settings.tmux.layout,
+            )
+
+        # 4. Launch agent command in pane 0
+        profile = self.settings.agent.resolve_profile(info.agent_profile)
+        agent_cmd = profile.command
+        if profile.args:
+            agent_cmd += " " + " ".join(profile.args)
+        assert info.tmux_window_id is not None  # set above from window.window_id
+        self.tmux.send_keys_to_window_id(
+            session_name=self.session_name,
+            window_id=info.tmux_window_id,
+            keys=agent_cmd,
+        )
+
+    def create(
+        self,
+        branch: str,
+        base_branch: str | None = None,
+        agent_profile: str | None = None,
+    ) -> WorktreeInfo:
         """Create a worktree, tmux window, bootstrap it, and launch the agent."""
         base = base_branch or self.settings.project.base_branch
         wt_path = self._worktree_path(branch)
@@ -78,53 +137,16 @@ class WorktreeManager:
             )
             self.state.worktrees.append(info)
         info.index = self._allocate_index()
+        info.agent_profile = agent_profile
         self.state.save()
 
         try:
-            # 1. Create git worktree
+            # Create git worktree
             wt_path.parent.mkdir(parents=True, exist_ok=True)
             git.create_worktree(self.repo_path, wt_path, branch, base)
 
-            # 2. Bootstrap the worktree
-            bootstrap_worktree(
-                repo_path=self.repo_path,
-                worktree_path=wt_path,
-                config=self.settings.bootstrap,
-                python=self.settings.project.languages.python,
-                javascript=self.settings.project.languages.javascript,
-            )
-
-            # 3. Create tmux window
-            win_name = self._window_name(branch)
-            window = self.tmux.create_window(
-                session_name=self.session_name,
-                window_name=win_name,
-                start_directory=wt_path,
-            )
-            info.tmux_window_id = window.window_id
-            info.status = WorktreeStatus.ACTIVE
-
-            # 4. Set up service panes (if any)
-            services = self.settings.services
-            if services:
-                tpl_vars = self._build_template_variables(info)
-                rendered_cmds = [render_template(svc.command, tpl_vars) for svc in services]
-                self.tmux.setup_service_panes(
-                    window=window,
-                    service_commands=rendered_cmds,
-                    start_directory=wt_path,
-                    layout=self.settings.tmux.layout,
-                )
-
-            # 5. Launch agent command in pane 0
-            agent_cmd = self.settings.agent.command
-            if self.settings.agent.args:
-                agent_cmd += " " + " ".join(self.settings.agent.args)
-            self.tmux.send_keys(
-                session_name=self.session_name,
-                window_name=win_name,
-                keys=agent_cmd,
-            )
+            # Bootstrap, tmux window, services, agent
+            self._setup_window(info)
 
         except Exception:
             info.status = WorktreeStatus.ERROR
@@ -137,9 +159,10 @@ class WorktreeManager:
     def adopt_existing(self) -> list[WorktreeInfo]:
         """Discover existing git worktrees and adopt them into the session.
 
-        Introspects `git worktree list`, skips the main worktree (the repo
-        itself), and creates tmux windows for any others found. This lets
-        bouquet pick up worktrees created manually or from a previous session.
+        Introspects ``git worktree list``, skips the main worktree (the repo
+        itself), and fully initialises each adopted worktree: bootstrap,
+        tmux window with service panes, and agent launch — just like
+        :meth:`create` but without the ``git worktree add`` step.
         """
         existing_branches = {w.branch for w in self.state.worktrees}
         git_worktrees = git.list_worktrees(self.repo_path)
@@ -161,24 +184,16 @@ class WorktreeManager:
             if branch in existing_branches:
                 continue
 
-            # Adopt this worktree
             info = WorktreeInfo(
                 branch=branch,
                 path=wt_path,
-                status=WorktreeStatus.ACTIVE,
+                status=WorktreeStatus.CREATING,
                 created_at=datetime.now(),
                 index=self._allocate_index(),
             )
 
-            # Create a tmux window for it
-            win_name = self._window_name(branch)
             try:
-                window = self.tmux.create_window(
-                    session_name=self.session_name,
-                    window_name=win_name,
-                    start_directory=wt_path,
-                )
-                info.tmux_window_id = window.window_id
+                self._setup_window(info)
             except Exception:
                 info.status = WorktreeStatus.IDLE
 
@@ -200,10 +215,14 @@ class WorktreeManager:
         info.status = WorktreeStatus.REMOVING
         self.state.save()
 
-        # Kill tmux window
-        win_name = self._window_name(branch)
-        with contextlib.suppress(Exception):
-            self.tmux.kill_window(self.session_name, win_name)
+        # Kill tmux window — prefer window ID (unique) over window name
+        if info.tmux_window_id:
+            with contextlib.suppress(Exception):
+                self.tmux.kill_window_by_id(self.session_name, info.tmux_window_id)
+        else:
+            win_name = self._window_name(branch)
+            with contextlib.suppress(Exception):
+                self.tmux.kill_window(self.session_name, win_name)
 
         # Remove git worktree
         with contextlib.suppress(Exception):
@@ -220,8 +239,12 @@ class WorktreeManager:
 
     def switch_to(self, branch: str) -> None:
         """Switch to the tmux window for a given branch."""
-        win_name = self._window_name(branch)
-        self.tmux.switch_to_window(self.session_name, win_name)
+        info = next((w for w in self.state.worktrees if w.branch == branch), None)
+        if info and info.tmux_window_id:
+            self.tmux.switch_to_window_by_id(self.session_name, info.tmux_window_id)
+        else:
+            win_name = self._window_name(branch)
+            self.tmux.switch_to_window(self.session_name, win_name)
 
     def list_active(self) -> list[WorktreeInfo]:
         """Return the list of active worktrees."""

@@ -2,8 +2,10 @@
 
 from __future__ import annotations
 
+import hashlib
 import os
 import sys
+import time
 from pathlib import Path
 
 import click
@@ -13,12 +15,35 @@ from textual.binding import Binding
 from textual.containers import Vertical
 from textual.widgets import Footer, Static
 
+from bouquet.activity import POLLABLE_STATUSES, ActivityMonitor
+from bouquet.agents.base import AgentResponse
 from bouquet.config import BouquetSettings, load_config
 from bouquet.models import SessionState, WorktreeInfo, WorktreeStatus
 from bouquet.tmux import TmuxManager
-from bouquet.tui.screens import ConfirmQuitScreen, NewWorktreeScreen
+from bouquet.tui.screens import (
+    BroadcastResultsScreen,
+    ConfirmQuitScreen,
+    NewWorktreeScreen,
+    SendPromptScreen,
+)
 from bouquet.tui.widgets import ProjectHeader, WorktreeTable
 from bouquet.worktree import WorktreeManager
+
+
+def _extract_response(content: str, prompt: str) -> str:
+    """Extract the agent's response from captured pane content.
+
+    Looks for the sent prompt in the pane output and returns everything
+    after it.  Falls back to the last 30 non-empty lines.
+    """
+    lines = content.splitlines()
+    prompt_prefix = prompt[:50]
+    for i, line in enumerate(lines):
+        if prompt_prefix in line:
+            return "\n".join(lines[i + 1 :]).strip()
+    # Fallback: last 30 non-empty lines
+    recent = [line for line in lines if line.strip()][-30:]
+    return "\n".join(recent).strip()
 
 
 class OrchestratorApp(App):
@@ -30,6 +55,8 @@ class OrchestratorApp(App):
         Binding("n", "new_worktree", "New worktree"),
         Binding("s", "switch_worktree", "Switch to window"),
         Binding("d", "delete_worktree", "Delete worktree"),
+        Binding("p", "send_prompt", "Send prompt"),
+        Binding("t", "status", "Status"),
         Binding("r", "refresh", "Refresh"),
         Binding("q", "quit", "Quit"),
     ]
@@ -44,6 +71,9 @@ class OrchestratorApp(App):
         self.settings = settings
         self.session_state = state
         self.manager = manager
+        self._activity_monitor = ActivityMonitor(manager.tmux)
+        self._polling = False
+        self._send_to_all = False
 
     def compose(self) -> ComposeResult:
         yield ProjectHeader(self.settings.project.name)
@@ -54,18 +84,50 @@ class OrchestratorApp(App):
 
     def on_mount(self) -> None:
         self._refresh_table()
+        self.set_interval(2.0, self._poll_activity)
 
     def _refresh_table(self) -> None:
         table = self.query_one(WorktreeTable)
         table.refresh_worktrees(self.manager.list_active())
 
+    def _sendable_worktrees(self) -> list[WorktreeInfo]:
+        """Return worktrees that have a tmux window and are in a pollable state."""
+        return [wt for wt in self.session_state.worktrees if wt.tmux_window_id and wt.status in POLLABLE_STATUSES]
+
+    # --- Activity polling ---
+
+    def _poll_activity(self) -> None:
+        """Kick off a background poll (guards against overlapping polls)."""
+        if not self._polling:
+            self._poll_activity_worker()
+
+    @work(thread=True)
+    def _poll_activity_worker(self) -> None:
+        """Poll tmux panes and update worktree statuses."""
+        self._polling = True
+        try:
+            changed = False
+            for wt in self.session_state.worktrees:
+                if wt.tmux_window_id and wt.status in POLLABLE_STATUSES:
+                    new_status = self._activity_monitor.check(self.session_state.tmux_session_name, wt.tmux_window_id)
+                    if new_status != wt.status:
+                        wt.status = new_status
+                        changed = True
+            if changed:
+                self.call_from_thread(self._refresh_table)
+        finally:
+            self._polling = False
+
+    # --- Worktree CRUD ---
+
     def action_new_worktree(self) -> None:
         """Open the new worktree dialog."""
         base = self.settings.project.base_branch
+        profile_names = [p.name for p in self.settings.agent.profiles]
 
-        def on_result(result: tuple[str, str] | None) -> None:
+        def on_result(result: tuple[str, str, str | None] | None) -> None:
             if result is not None:
-                branch, base_branch = result
+                branch, base_branch, profile = result
                 # Add a CREATING placeholder immediately so the user sees feedback
                 placeholder = WorktreeInfo(
                     branch=branch,
@@ -74,15 +136,18 @@ class OrchestratorApp(App):
                 )
                 self.session_state.worktrees.append(placeholder)
                 self._refresh_table()
-                self._create_worktree(branch, base_branch)
+                self._create_worktree(branch, base_branch, profile)
 
-        self.push_screen(NewWorktreeScreen(default_base=base), callback=on_result)
+        self.push_screen(
+            NewWorktreeScreen(default_base=base, profile_names=profile_names),
+            callback=on_result,
+        )
 
     @work(thread=True)
-    def _create_worktree(self, branch: str, base_branch: str) -> None:
+    def _create_worktree(self, branch: str, base_branch: str, agent_profile: str | None = None) -> None:
         """Create a worktree in a background thread."""
         try:
-            self.manager.create(branch, base_branch)
+            self.manager.create(branch, base_branch, agent_profile=agent_profile)
             self.call_from_thread(self._refresh_table)
             self.call_from_thread(self.notify, f"Worktree '{branch}' created")
         except Exception as e:
@@ -128,6 +193,10 @@ class OrchestratorApp(App):
     @work(thread=True)
     def _remove_worktree(self, branch: str) -> None:
         """Remove a worktree in a background thread."""
+        # Clean up activity monitor state
+        info = next((w for w in self.session_state.worktrees if w.branch == branch), None)
+        if info and info.tmux_window_id:
+            self._activity_monitor.remove(info.tmux_window_id)
         try:
             self.manager.remove(branch)
             self.call_from_thread(self._refresh_table)
@@ -135,6 +204,155 @@ class OrchestratorApp(App):
         except Exception as e:
             self.call_from_thread(self._refresh_table)
             self.call_from_thread(self.notify, f"Error removing worktree: {e}", severity="error")
+
+    # --- Status (send-keys + capture pane responses) ---
+
+    def action_status(self) -> None:
+        """Ask all agents to summarize their current progress."""
+        targets = self._sendable_worktrees()
+        if not targets:
+            self.notify("No active worktrees", severity="warning")
+            return
+        self.notify(f"Requesting status from {len(targets)} agent(s)...")
+        self._run_status()
+
+    @work(thread=True)
+    def _run_status(self) -> None:
+        """Send status prompt via send-keys, poll for completion, capture responses."""
+        targets = self._sendable_worktrees()
+        if not targets:
+            self.call_from_thread(self.notify, "No active worktrees", severity="warning")
+            return
+
+        prompt = (
+            "Briefly summarize your current progress and state in 2-3 sentences. "
+            "What are you working on, what have you done, and what remains?"
+        )
+        session = self.session_state.tmux_session_name
+        start = time.monotonic()
+
+        # 1. Send prompt to all agents
+        sent: list[WorktreeInfo] = []
+        for wt in targets:
+            try:
+                self.manager.tmux.send_keys_to_window_id(session, wt.tmux_window_id, prompt)  # type: ignore[arg-type]
+                sent.append(wt)
+            except Exception:
+                pass
+
+        if not sent:
+            self.call_from_thread(self.notify, "Failed to send status request", severity="error")
+            return
+
+        # 2. Poll until all agents stabilize (or timeout)
+        hashes: dict[str, str] = {}
+        stable_counts: dict[str, int] = {}
+        max_wait = 120
+        elapsed = 0
+        stability_threshold = 3
+
+        time.sleep(3)  # initial wait for agents to start responding
+
+        while elapsed < max_wait:
+            all_stable = True
+            for wt in sent:
+                try:
+                    content = self.manager.tmux.capture_pane(session, wt.tmux_window_id)  # type: ignore[arg-type]
+                except Exception:
+                    continue
+                h = hashlib.sha256(content.encode()).hexdigest()
+                prev = hashes.get(wt.branch)
+                hashes[wt.branch] = h
+                if prev is None or h != prev:
+                    stable_counts[wt.branch] = 0
+                    all_stable = False
+                else:
+                    stable_counts[wt.branch] = stable_counts.get(wt.branch, 0) + 1
+                    if stable_counts[wt.branch] < stability_threshold:
+                        all_stable = False
+            if all_stable:
+                break
+            time.sleep(2)
+            elapsed += 2
+
+        duration_ms = int((time.monotonic() - start) * 1000)
+
+        # 3. Capture final pane content and build responses
+        responses: list[AgentResponse] = []
+        for wt in sent:
+            try:
+                content = self.manager.tmux.capture_pane(session, wt.tmux_window_id)  # type: ignore[arg-type]
+            except Exception:
+                content = ""
+            response_text = _extract_response(content, prompt)
+            responses.append(
+                AgentResponse(
+                    worktree_branch=wt.branch,
+                    result=response_text or "(no response captured)",
+                    duration_ms=duration_ms,
+                )
+            )
+
+        def show_results() -> None:
+            self.push_screen(BroadcastResultsScreen(responses))
+
+        self.call_from_thread(show_results)
+
+    # --- Send prompt (tmux send-keys) ---
+
+    def action_send_prompt(self) -> None:
+        """Open a dialog to send a prompt directly into agent terminal(s)."""
+        table = self.query_one(WorktreeTable)
+        selected_branch: str | None = None
+        if table.cursor_row is not None and table.row_count > 0:
+            row_data = table.get_row_at(table.cursor_row)
+            selected_branch = str(row_data[1])  # Column 1 is Branch
+
+        def on_result(result: tuple[str, bool] | None) -> None:
+            if result is not None:
+                prompt, send_to_all = result
+                self._send_to_all = send_to_all  # remember for next invocation
+                self._send_prompt_to_agents(prompt, send_to_all, selected_branch)
+
+        self.push_screen(
+            SendPromptScreen(selected_branch=selected_branch, default_send_all=self._send_to_all),
+            callback=on_result,
+        )
+
+    def _send_prompt_to_agents(self, prompt: str, send_to_all: bool, selected_branch: str | None) -> None:
+        """Send a prompt via tmux send-keys to one or all agent terminals."""
+        targets: list[WorktreeInfo] = []
+        if send_to_all:
+            targets = self._sendable_worktrees()
+        elif selected_branch:
+            wt = next(
+                (w for w in self.session_state.worktrees if w.branch == selected_branch and w.tmux_window_id),
+                None,
+            )
+            if wt:
+                targets = [wt]
+
+        if not targets:
+            self.notify("No valid targets", severity="warning")
+            return
+
+        errors = 0
+        for wt in targets:
+            try:
+                self.manager.tmux.send_keys_to_window_id(
+                    self.session_state.tmux_session_name,
+                    wt.tmux_window_id,  # type: ignore[arg-type]
+                    prompt,
+                )
+            except Exception as e:
+                self.notify(f"Error sending to {wt.branch}: {e}", severity="error")
+                errors += 1
+
+        sent = len(targets) - errors
+        if sent > 0:
+            self.notify(f"Sent prompt to {sent} agent(s)")
+
+    # --- Quit ---
 
     async def action_quit(self) -> None:
         """Show confirmation dialog before quitting."""
