@@ -50,10 +50,6 @@ class OrchestratorApp(App):
         with Vertical(id="body"):
             yield Static("Active Worktrees", id="section-title")
             yield WorktreeTable()
-        yield Static(
-            "[N] New  [Enter/S] Switch  [D] Delete  [R] Refresh  [Q] Quit",
-            id="footer-bar",
-        )
         yield Footer()
 
     def on_mount(self) -> None:
