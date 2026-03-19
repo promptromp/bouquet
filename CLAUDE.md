@@ -28,7 +28,7 @@ CLI (Click) → bouquet start/stop/init (args optional, infers from cwd + .bouqu
        ├─► git.py         subprocess calls for worktree CRUD
        ├─► tmux.py        libtmux wrapper for session/window/pane lifecycle
        ├─► template.py    safe {{ expr }} rendering for service commands
-       ├─► bootstrap.py   env file copy, CoW clone .venv/node_modules, dep install
+       ├─► bootstrap.py   setup commands + env capture, env file copy, CoW clone, dep install
        ├─► activity.py    ActivityMonitor — pane scraping for live status
        └─► TUI (tui/app.py — Textual app in tmux window 0)
             └─► spawns worktree windows via WorktreeManager
@@ -52,6 +52,7 @@ CLI (Click) → bouquet start/stop/init (args optional, infers from cwd + .bouqu
 - **Window-ID-based tmux operations** — `TmuxManager` has both name-based (legacy) and ID-based methods. Prefer ID-based (`send_keys_to_window_id`, `switch_to_window_by_id`, `kill_window_by_id`) to avoid window name collisions.
 - **Activity polling** — `ActivityMonitor` runs every 2s in the TUI via `set_interval` + `@work(thread=True)`. SHA256 hashing of pane content; hash change → RUNNING, stable 3+ polls → IDLE (or WAITING if a permission prompt is detected).
 - **Agent profiles** — `AgentConfig.resolve_profile(name)` resolves a named profile or falls back to the top-level `command`/`args`. Backward-compatible: old configs without `profiles` work unchanged.
+- **Bootstrap setup commands** — `BootstrapConfig.setup_commands` runs shell commands in a single bash context before dependency installation. Env vars exported by these commands are captured (via a `python3` JSON dump to a temp file — portable across macOS/Linux) and propagated to deps install subprocesses and the tmux session (via `set_environment`). Use case: private registry auth (e.g. AWS CodeArtifact tokens).
 
 ## Configuration
 

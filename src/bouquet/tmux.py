@@ -142,6 +142,14 @@ class TmuxManager:
         if window:
             window.kill()
 
+    def set_session_environment(self, session_name: str, key: str, value: str) -> None:
+        """Set an environment variable on the tmux session.
+
+        Session-level env vars are inherited by all new panes/windows.
+        """
+        session = self.get_session(session_name)
+        session.set_environment(key, value)
+
     def capture_pane(self, session_name: str, window_id: str) -> str:
         """Capture the content of pane 0 in the given window (by window ID)."""
         window = self._get_window_by_id(session_name, window_id)

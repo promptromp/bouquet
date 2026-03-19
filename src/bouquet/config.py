@@ -45,6 +45,7 @@ class AgentConfig(BaseModel):
 
 
 class BootstrapConfig(BaseModel):
+    setup_commands: list[str] = Field(default_factory=list)
     copy_env_files: list[str] = Field(default_factory=lambda: [".env", ".env.local", ".envrc"])
     python_deps_command: str = "uv sync"
     node_deps_command: str = "pnpm install"
@@ -140,6 +141,15 @@ args = []
 # args = ["--model", "claude-sonnet-4-20250514"]
 
 [bootstrap]
+# setup_commands run in a single bash shell before dependency installation.
+# Environment variables exported by these commands are captured and propagated
+# to dependency install commands and to tmux service panes.
+#
+# setup_commands = [
+#     "export TOKEN=$(some-auth-command --output text)",
+#     "export UV_EXTRA_INDEX_URL=\"https://user:$TOKEN@private.registry/simple/\"",
+# ]
+setup_commands = []
 copy_env_files = [".env", ".env.local", ".envrc"]
 python_deps_command = "uv sync"
 node_deps_command = "pnpm install"

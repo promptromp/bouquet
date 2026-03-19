@@ -70,8 +70,8 @@ class WorktreeManager:
         """
         wt_path = info.path
 
-        # 1. Bootstrap the worktree
-        bootstrap_worktree(
+        # 1. Bootstrap the worktree (returns env delta from setup_commands)
+        env_delta = bootstrap_worktree(
             repo_path=self.repo_path,
             worktree_path=wt_path,
             config=self.settings.bootstrap,
@@ -79,7 +79,12 @@ class WorktreeManager:
             javascript=self.settings.project.languages.javascript,
         )
 
-        # 2. Create tmux window
+        # 2. Apply setup env vars to tmux session so service panes inherit them
+        if env_delta:
+            for key, value in env_delta.items():
+                self.tmux.set_session_environment(self.session_name, key, value)
+
+        # 3. Create tmux window
         win_name = self._window_name(info.branch)
         window = self.tmux.create_window(
             session_name=self.session_name,
@@ -89,7 +94,7 @@ class WorktreeManager:
         info.tmux_window_id = window.window_id
         info.status = WorktreeStatus.ACTIVE
 
-        # 3. Set up service panes (if any)
+        # 4. Set up service panes (if any)
         services = self.settings.services
         if services:
             tpl_vars = self._build_template_variables(info)
@@ -101,7 +106,7 @@ class WorktreeManager:
                 layout=self.settings.tmux.layout,
             )
 
-        # 4. Launch agent command in pane 0
+        # 5. Launch agent command in pane 0
         profile = self.settings.agent.resolve_profile(info.agent_profile)
         agent_cmd = profile.command
         if profile.args:
