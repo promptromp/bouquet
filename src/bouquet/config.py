@@ -122,11 +122,52 @@ direnv_allow = true
 session_prefix = "bouquet"
 # layout = "main-vertical"   # tmux layout: main-vertical, tiled, even-horizontal, etc.
 
+# ---------------------------------------------------------------------------
+# Services — optional processes to run alongside the agent in each worktree.
+#
+# Each [[services]] entry gets its own tmux pane. Commands support template
+# variables inside {{{{ }}}} with arithmetic for automatic port offsetting:
+#
+#   BOUQUET_WORKTREE_INDEX   — unique int per worktree (1, 2, 3, ...)
+#   BOUQUET_WORKTREE_BRANCH  — branch name, e.g. "feature/auth"
+#   BOUQUET_WORKTREE_PATH    — absolute path to the worktree directory
+#   BOUQUET_PROJECT_NAME     — project name from this config
+#
+# Examples:
+#
+# --- Python API server (unique port per worktree) ---
 # [[services]]
 # name = "api"
 # command = "uv run uvicorn app.main:app --reload --port {{{{ 8000 + BOUQUET_WORKTREE_INDEX }}}}"
 #
+# --- Background worker (no port needed) ---
+# [[services]]
+# name = "worker"
+# command = "uv run celery -A app.tasks worker --loglevel=info"
+#
+# --- Scheduler / beat process ---
+# [[services]]
+# name = "scheduler"
+# command = "uv run celery -A app.tasks beat"
+#
+# --- Event consumer (e.g. FastStream / Kafka / RabbitMQ) ---
+# [[services]]
+# name = "events"
+# command = "uv run faststream run app.events:app"
+#
+# --- Frontend dev server (unique port per worktree) ---
 # [[services]]
 # name = "frontend"
 # command = "npm run dev -- --port {{{{ 3000 + BOUQUET_WORKTREE_INDEX }}}}"
+#
+# --- Database / docker-compose services ---
+# [[services]]
+# name = "infra"
+# command = "docker compose up postgres redis"
+#
+# --- Custom log tail ---
+# [[services]]
+# name = "logs"
+# command = "tail -f /tmp/{{{{ BOUQUET_PROJECT_NAME }}}}-{{{{ BOUQUET_WORKTREE_INDEX }}}}.log"
+# ---------------------------------------------------------------------------
 """
