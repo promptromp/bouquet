@@ -9,6 +9,7 @@ import pytest
 
 import bouquet.models as models_mod
 from bouquet.config import BouquetSettings
+from bouquet.git import create_worktree as git_create_worktree
 from bouquet.models import SessionState, WorktreeStatus
 from bouquet.worktree import WorktreeManager
 
@@ -87,6 +88,42 @@ def test_list_active(manager: WorktreeManager) -> None:
     assert len(active) == 2
     branches = {w.branch for w in active}
     assert branches == {"feature/a", "feature/b"}
+
+
+def test_adopt_existing(manager: WorktreeManager, tmp_git_repo: Path) -> None:
+    """adopt_existing should discover pre-existing git worktrees."""
+    # Create a worktree outside of bouquet (simulating manual creation)
+    wt_path = tmp_git_repo.parent / "manual-worktree"
+    git_create_worktree(tmp_git_repo, wt_path, "feature/manual", "main")
+
+    assert manager.list_active() == []
+
+    adopted = manager.adopt_existing()
+    assert len(adopted) == 1
+    assert adopted[0].branch == "feature/manual"
+    assert adopted[0].status == WorktreeStatus.ACTIVE
+    assert adopted[0].tmux_window_id == "@1"
+
+    # Should now appear in list_active
+    assert len(manager.list_active()) == 1
+
+
+def test_adopt_existing_skips_main_worktree(manager: WorktreeManager) -> None:
+    """adopt_existing should not adopt the main repo worktree."""
+    adopted = manager.adopt_existing()
+    assert len(adopted) == 0
+
+
+def test_adopt_existing_skips_already_tracked(manager: WorktreeManager, tmp_git_repo: Path) -> None:
+    """adopt_existing should skip worktrees already in session state."""
+    # Create a worktree through bouquet (tracked)
+    manager.create("feature/tracked")
+    assert len(manager.list_active()) == 1
+
+    # adopt_existing should not duplicate it
+    adopted = manager.adopt_existing()
+    assert len(adopted) == 0
+    assert len(manager.list_active()) == 1
 
 
 def test_remove_all(manager: WorktreeManager) -> None:
