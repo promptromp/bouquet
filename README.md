@@ -25,8 +25,10 @@ bouquet start              # TUI launches, create worktrees, agents spin up
 | 🌿 | **Git worktree isolation** | Each feature branch gets its own worktree, venv, and node_modules — no cross-contamination |
 | 🖥️ | **Multi-pane services** | Run API servers, workers, frontends alongside the agent with automatic port offsetting per worktree |
 | 🤖 | **Agent orchestration** | TUI in tmux window 0 to create, switch, and manage worktree-backed agent windows |
+| 📋 | **Task queue** | Define a backlog of tasks that get automatically delegated to worktrees — agents pick up work without manual intervention |
+| 🔧 | **Rich configuration** | Expressive `.bouquet.toml` with template expressions (`{{ 8000 + BOUQUET_WORKTREE_INDEX }}`), per-worktree variables, agent profiles, and multi-service layouts |
 | ⚡ | **Fast bootstrap** | CoW-clones `.venv`/`node_modules` (APFS), copies `.env` files, runs `uv sync`/`pnpm install` |
-| 🔧 | **Zero-arg CLI** | Just `cd` into your repo and run `bouquet start` — project name inferred from `.bouquet.toml` |
+| 🔌 | **Agent-agnostic** | Named profiles let you mix Claude, Aider, Codex, or any CLI agent — even different agents per worktree |
 
 ---
 
@@ -212,3 +214,15 @@ The Conceptual Stack
 │         Environment Layer               │  ← venv/node_modules/env vars
 └─────────────────────────────────────────┘
 ```
+
+---
+
+## Related Projects
+
+Bouquet draws inspiration from and complements several tools in the multi-agent coding space:
+
+- **[claude-squad](https://github.com/smtg-ai/claude-squad)** — A Go-based TUI for managing multiple Claude Code instances in parallel. Claude-squad focuses on running agents side-by-side with a clean terminal UI. Bouquet goes further with declarative multi-service layouts (API servers, frontends, workers per worktree), a rich template-based configuration language with per-worktree variable expansion, and a task queue for automatic work delegation across agents.
+
+- **[ruflo](https://github.com/ruvnet/ruflo)** — A Rust-based agentic workflow orchestrator with a focus on DAG-based task execution and CI/CD integration. Ruflo takes a pipeline-oriented approach to agent coordination, while bouquet is designed around the developer's local workflow — git worktrees, tmux sessions, and interactive TUI management with live activity detection.
+
+- **[Claude Code Agent Teams](https://code.claude.com/docs/en/agent-teams)** — Anthropic's experimental built-in feature for coordinating multiple Claude Code agents. Agent Teams operates within the Claude Code runtime itself. Bouquet is agent-agnostic (works with Claude, Aider, Codex, or any CLI tool), provides full control over environment isolation, service orchestration, and configuration through `.bouquet.toml`.
