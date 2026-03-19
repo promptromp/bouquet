@@ -72,6 +72,16 @@ class TmuxManager:
         window = session.new_window(**kwargs)
         return window
 
+    def _get_window_by_id(self, session_name: str, window_id: str) -> libtmux.Window:
+        """Look up a window by its unique tmux ID (e.g. ``@1``)."""
+        session = self.get_session(session_name)
+        window = session.windows.get(window_id=window_id)
+        if window is None:
+            raise TmuxError(f"Window '{window_id}' not found in session '{session_name}'")
+        return window
+
+    # --- name-based operations (legacy) ---
+
     def send_keys(
         self,
         session_name: str,
@@ -79,7 +89,7 @@ class TmuxManager:
         keys: str,
         enter: bool = True,
     ) -> None:
-        """Send keystrokes to a window's active pane."""
+        """Send keystrokes to a window's active pane (by window name)."""
         session = self.get_session(session_name)
         window = session.windows.get(window_name=window_name)
         if window is None:
@@ -90,7 +100,7 @@ class TmuxManager:
         pane.send_keys(keys, enter=enter)
 
     def switch_to_window(self, session_name: str, window_name: str) -> None:
-        """Switch the session's active window."""
+        """Switch the session's active window (by window name)."""
         session = self.get_session(session_name)
         window = session.windows.get(window_name=window_name)
         if window is None:
@@ -98,11 +108,48 @@ class TmuxManager:
         window.select()
 
     def kill_window(self, session_name: str, window_name: str) -> None:
-        """Kill a specific window."""
+        """Kill a specific window (by window name)."""
         session = self.get_session(session_name)
         window = session.windows.get(window_name=window_name)
         if window:
             window.kill()
+
+    # --- ID-based operations (preferred — avoids window name collisions) ---
+
+    def send_keys_to_window_id(
+        self,
+        session_name: str,
+        window_id: str,
+        keys: str,
+        enter: bool = True,
+    ) -> None:
+        """Send keystrokes to a window's active pane (by window ID)."""
+        window = self._get_window_by_id(session_name, window_id)
+        pane = window.active_pane
+        if pane is None:
+            raise TmuxError(f"No active pane in window '{window_id}'")
+        pane.send_keys(keys, enter=enter)
+
+    def switch_to_window_by_id(self, session_name: str, window_id: str) -> None:
+        """Switch the session's active window (by window ID)."""
+        window = self._get_window_by_id(session_name, window_id)
+        window.select()
+
+    def kill_window_by_id(self, session_name: str, window_id: str) -> None:
+        """Kill a specific window (by window ID)."""
+        session = self.get_session(session_name)
+        window = session.windows.get(window_id=window_id)
+        if window:
+            window.kill()
+
+    def capture_pane(self, session_name: str, window_id: str) -> str:
+        """Capture the content of pane 0 in the given window (by window ID)."""
+        window = self._get_window_by_id(session_name, window_id)
+        pane = window.active_pane
+        if pane is None:
+            return ""
+        lines = pane.capture_pane()
+        return "\n".join(lines)
 
     def kill_session(self, session_name: str) -> None:
         """Kill an entire tmux session."""

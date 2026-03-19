@@ -29,6 +29,7 @@ CLI (Click) → bouquet start/stop/init (args optional, infers from cwd + .bouqu
        ├─► tmux.py        libtmux wrapper for session/window/pane lifecycle
        ├─► template.py    safe {{ expr }} rendering for service commands
        ├─► bootstrap.py   env file copy, CoW clone .venv/node_modules, dep install
+       ├─► activity.py    ActivityMonitor — pane scraping for live status
        └─► TUI (tui/app.py — Textual app in tmux window 0)
             └─► spawns worktree windows via WorktreeManager
 ```
@@ -47,6 +48,10 @@ CLI (Click) → bouquet start/stop/init (args optional, infers from cwd + .bouqu
 - **Worktree indices** are slot-based with reuse (lowest unused positive int). Stored in `WorktreeInfo.index`. Used for port offsetting in service templates.
 - **Template engine** (`template.py`) uses `ast.parse` with a whitelist of safe nodes — no Jinja2 dependency. Only arithmetic on known variables is allowed.
 - **CLI args are optional** — `bouquet start`/`stop` default to cwd as repo and read project name from `.bouquet.toml`. Errors clearly if not in a git repo or no config found.
+- **Window names use full branch** — `_window_name()` replaces `/` with `-` (e.g. `feature/auth` → `feature-auth`). Previous behavior used only the last segment, causing collisions.
+- **Window-ID-based tmux operations** — `TmuxManager` has both name-based (legacy) and ID-based methods. Prefer ID-based (`send_keys_to_window_id`, `switch_to_window_by_id`, `kill_window_by_id`) to avoid window name collisions.
+- **Activity polling** — `ActivityMonitor` runs every 2s in the TUI via `set_interval` + `@work(thread=True)`. SHA256 hashing of pane content; hash change → RUNNING, stable 3+ polls → IDLE (or WAITING if a permission prompt is detected).
+- **Agent profiles** — `AgentConfig.resolve_profile(name)` resolves a named profile or falls back to the top-level `command`/`args`. Backward-compatible: old configs without `profiles` work unchanged.
 
 ## Configuration
 

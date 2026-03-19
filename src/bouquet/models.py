@@ -13,6 +13,8 @@ from pydantic import BaseModel, Field
 class WorktreeStatus(StrEnum):
     CREATING = "creating"
     ACTIVE = "active"
+    RUNNING = "running"
+    WAITING = "waiting"
     IDLE = "idle"
     ERROR = "error"
     REMOVING = "removing"
@@ -25,6 +27,7 @@ class WorktreeInfo(BaseModel):
     status: WorktreeStatus = WorktreeStatus.CREATING
     created_at: datetime = Field(default_factory=datetime.now)
     index: int = 0
+    agent_profile: str | None = None
 
 
 class SessionState(BaseModel):

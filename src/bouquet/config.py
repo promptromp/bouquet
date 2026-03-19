@@ -22,9 +22,26 @@ class ProjectConfig(BaseModel):
     languages: LanguagesConfig = Field(default_factory=LanguagesConfig)
 
 
+class AgentProfile(BaseModel):
+    name: str
+    command: str
+    args: list[str] = Field(default_factory=list)
+
+
 class AgentConfig(BaseModel):
     command: str = "claude"
     args: list[str] = Field(default_factory=list)
+    default_profile: str = "claude"
+    profiles: list[AgentProfile] = Field(default_factory=list)
+
+    def resolve_profile(self, profile_name: str | None = None) -> AgentProfile:
+        """Resolve a profile by name, falling back to default, then to command/args."""
+        name = profile_name or self.default_profile
+        for p in self.profiles:
+            if p.name == name:
+                return p
+        # Synthesize from top-level command/args for backward compatibility
+        return AgentProfile(name="default", command=self.command, args=self.args)
 
 
 class BootstrapConfig(BaseModel):
@@ -110,6 +127,17 @@ javascript = false
 [agent]
 command = "claude"
 args = []
+# default_profile = "claude"
+#
+# [[agent.profiles]]
+# name = "claude"
+# command = "claude"
+# args = []
+#
+# [[agent.profiles]]
+# name = "aider"
+# command = "aider"
+# args = ["--model", "claude-sonnet-4-20250514"]
 
 [bootstrap]
 copy_env_files = [".env", ".env.local", ".envrc"]

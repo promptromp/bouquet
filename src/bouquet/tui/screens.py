@@ -3,9 +3,9 @@
 from __future__ import annotations
 
 from textual.app import ComposeResult
-from textual.containers import Vertical, VerticalScroll
+from textual.containers import Horizontal, Vertical, VerticalScroll
 from textual.screen import ModalScreen
-from textual.widgets import Button, Input, Label, Static
+from textual.widgets import Button, Input, Label, Select, Static, Switch
 
 from bouquet.agents.base import AgentResponse
 
@@ -54,7 +54,7 @@ class ConfirmQuitScreen(ModalScreen[bool]):
         self.dismiss(event.button.id == "confirm-quit-btn")
 
 
-class NewWorktreeScreen(ModalScreen[tuple[str, str] | None]):
+class NewWorktreeScreen(ModalScreen[tuple[str, str, str | None] | None]):
     """Modal dialog for creating a new worktree."""
 
     CSS = """
@@ -78,6 +78,10 @@ class NewWorktreeScreen(ModalScreen[tuple[str, str] | None]):
         margin-bottom: 1;
     }
 
+    #dialog Select {
+        margin-bottom: 1;
+    }
+
     .button-row {
         layout: horizontal;
         height: auto;
@@ -89,9 +93,10 @@ class NewWorktreeScreen(ModalScreen[tuple[str, str] | None]):
     }
     """
 
-    def __init__(self, default_base: str = "main") -> None:
+    def __init__(self, default_base: str = "main", profile_names: list[str] | None = None) -> None:
         super().__init__()
         self._default_base = default_base
+        self._profile_names = profile_names or []
 
     def compose(self) -> ComposeResult:
         with Vertical(id="dialog"):
@@ -100,6 +105,13 @@ class NewWorktreeScreen(ModalScreen[tuple[str, str] | None]):
             yield Input(placeholder="feature/my-feature", id="branch-input")
             yield Label("Base branch:")
             yield Input(value=self._default_base, id="base-input")
+            if self._profile_names:
+                yield Label("Agent profile:")
+                yield Select(
+                    [(name, name) for name in self._profile_names],
+                    value=self._profile_names[0],
+                    id="profile-select",
+                )
             with Vertical(classes="button-row"):
                 yield Button("Create", variant="primary", id="create-btn")
                 yield Button("Cancel", variant="default", id="cancel-btn")
@@ -110,8 +122,12 @@ class NewWorktreeScreen(ModalScreen[tuple[str, str] | None]):
             base_input = self.query_one("#base-input", Input)
             branch = branch_input.value.strip()
             base = base_input.value.strip()
+            profile: str | None = None
+            if self._profile_names:
+                select = self.query_one("#profile-select", Select)
+                profile = str(select.value) if select.value != Select.BLANK else None
             if branch:
-                self.dismiss((branch, base))
+                self.dismiss((branch, base, profile))
             else:
                 branch_input.focus()
         else:
@@ -250,3 +266,86 @@ class BroadcastResultsScreen(ModalScreen[None]):
 
     def on_button_pressed(self, event: Button.Pressed) -> None:
         self.dismiss(None)
+
+
+class SendPromptScreen(ModalScreen[tuple[str, bool] | None]):
+    """Send a prompt directly to running agent(s) via tmux send-keys."""
+
+    CSS = """
+    SendPromptScreen {
+        align: center middle;
+    }
+
+    #send-prompt-dialog {
+        width: 70;
+        height: auto;
+        padding: 1 2;
+        border: thick $accent;
+        background: $surface;
+    }
+
+    #send-prompt-dialog Label {
+        margin-bottom: 1;
+    }
+
+    #send-prompt-dialog Input {
+        margin-bottom: 1;
+    }
+
+    .toggle-row {
+        height: auto;
+        margin-bottom: 1;
+    }
+
+    .toggle-row Switch {
+        margin-right: 1;
+    }
+
+    .toggle-row .toggle-label {
+        margin-top: 1;
+        margin-bottom: 0;
+    }
+
+    .button-row {
+        layout: horizontal;
+        height: auto;
+        margin-top: 1;
+    }
+
+    .button-row Button {
+        margin-right: 1;
+    }
+    """
+
+    def __init__(self, selected_branch: str | None = None) -> None:
+        super().__init__()
+        self._selected_branch = selected_branch
+
+    def compose(self) -> ComposeResult:
+        with Vertical(id="send-prompt-dialog"):
+            yield Label("Send Prompt to Agent")
+            yield Label("Types directly into the agent's terminal via tmux send-keys.")
+            yield Label("Prompt:")
+            yield Input(placeholder="e.g. Fix the failing test", id="prompt-input")
+            with Horizontal(classes="toggle-row"):
+                yield Switch(value=False, id="all-switch")
+                yield Label("Send to all worktrees", classes="toggle-label")
+            if self._selected_branch:
+                yield Label(f"Selected: {self._selected_branch}", id="target-label")
+            with Vertical(classes="button-row"):
+                yield Button("Send", variant="primary", id="send-btn")
+                yield Button("Cancel", variant="default", id="cancel-btn")
+
+    def on_button_pressed(self, event: Button.Pressed) -> None:
+        if event.button.id == "send-btn":
+            prompt = self.query_one("#prompt-input", Input).value.strip()
+            send_all = self.query_one("#all-switch", Switch).value
+            if prompt:
+                self.dismiss((prompt, send_all))
+            else:
+                self.query_one("#prompt-input", Input).focus()
+        else:
+            self.dismiss(None)
+
+    def on_input_submitted(self, event: Input.Submitted) -> None:
+        self.query_one("#send-btn", Button).press()

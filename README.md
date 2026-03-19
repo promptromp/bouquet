@@ -83,9 +83,12 @@ bouquet start my-project --repo /path/to/repo --config /path/to/.bouquet.toml
 
 | Key | Action |
 |---|---|
-| `N` | Create a new worktree (opens branch dialog) |
+| `N` | Create a new worktree (opens branch dialog with optional agent profile selector) |
 | `S` / `Enter` | Switch to the selected worktree's window |
 | `D` | Delete the selected worktree and its window |
+| `B` | Broadcast a prompt to all agents via `claude -p` (headless) |
+| `T` | Request a status summary from all agents |
+| `P` | Send a prompt directly into agent terminal(s) via tmux send-keys |
 | `R` | Refresh the worktree list |
 | `Q` | Quit (with confirmation — kills the session) |
 
@@ -138,6 +141,45 @@ Each worktree gets a unique index (1, 2, 3, ...) so services bind to different p
 Arithmetic supported: `{{ 8000 + BOUQUET_WORKTREE_INDEX }}` → `8001`.
 
 No services defined = single pane with just the agent (backward compatible).
+
+---
+
+## Agent Profiles
+
+Named agent configurations so you can switch between Claude, Aider, Codex, etc. per worktree:
+
+```toml
+[agent]
+command = "claude"
+default_profile = "claude"
+
+[[agent.profiles]]
+name = "claude"
+command = "claude"
+
+[[agent.profiles]]
+name = "aider"
+command = "aider"
+args = ["--model", "claude-sonnet-4-20250514"]
+```
+
+When profiles are defined, the TUI's new-worktree dialog shows a profile selector. If no profiles are defined, the top-level `command`/`args` are used (backward compatible).
+
+---
+
+## Activity Detection
+
+Bouquet polls each agent's tmux pane every 2 seconds to infer real-time status:
+
+| Status | Meaning |
+|---|---|
+| **● running** (green) | Agent output is actively changing |
+| **◆ waiting** (yellow) | Agent output stopped and a permission prompt was detected |
+| **○ idle** (dim) | Agent output hasn't changed for several polls |
+
+This replaces the static "active" status with live feedback. The TUI table updates automatically.
+
+---
 
 ### Pane Layout
 

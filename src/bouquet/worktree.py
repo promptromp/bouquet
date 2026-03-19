@@ -38,9 +38,12 @@ class WorktreeManager:
         return self.repo_path.parent / ".bouquet-worktrees" / safe_name
 
     def _window_name(self, branch: str) -> str:
-        """Compute a tmux window name for a branch."""
-        # Use the last segment of the branch for brevity
-        return branch.rsplit("/", maxsplit=1)[-1]
+        """Compute a tmux window name for a branch.
+
+        Uses the full branch name with ``/`` replaced by ``-`` so that
+        ``feature/auth`` and ``bugfix/auth`` produce distinct names.
+        """
+        return branch.replace("/", "-")
 
     def _allocate_index(self) -> int:
         """Return the lowest positive integer not used by any existing worktree."""
@@ -59,7 +62,12 @@ class WorktreeManager:
             "BOUQUET_PROJECT_NAME": self.settings.project.name,
         }
 
-    def create(self, branch: str, base_branch: str | None = None) -> WorktreeInfo:
+    def create(
+        self,
+        branch: str,
+        base_branch: str | None = None,
+        agent_profile: str | None = None,
+    ) -> WorktreeInfo:
         """Create a worktree, tmux window, bootstrap it, and launch the agent."""
         base = base_branch or self.settings.project.base_branch
         wt_path = self._worktree_path(branch)
@@ -78,6 +86,7 @@ class WorktreeManager:
             )
             self.state.worktrees.append(info)
         info.index = self._allocate_index()
+        info.agent_profile = agent_profile
         self.state.save()
 
         try:
@@ -116,13 +125,15 @@ class WorktreeManager:
                     layout=self.settings.tmux.layout,
                 )
 
-            # 5. Launch agent command in pane 0
-            agent_cmd = self.settings.agent.command
-            if self.settings.agent.args:
-                agent_cmd += " " + " ".join(self.settings.agent.args)
-            self.tmux.send_keys(
+            # 5. Launch agent command in pane 0 (use window ID to avoid name collisions)
+            profile = self.settings.agent.resolve_profile(agent_profile)
+            agent_cmd = profile.command
+            if profile.args:
+                agent_cmd += " " + " ".join(profile.args)
+            assert info.tmux_window_id is not None  # set above from window.window_id
+            self.tmux.send_keys_to_window_id(
                 session_name=self.session_name,
-                window_name=win_name,
+                window_id=info.tmux_window_id,
                 keys=agent_cmd,
             )
 
@@ -200,10 +211,14 @@ class WorktreeManager:
         info.status = WorktreeStatus.REMOVING
         self.state.save()
 
-        # Kill tmux window
-        win_name = self._window_name(branch)
-        with contextlib.suppress(Exception):
-            self.tmux.kill_window(self.session_name, win_name)
+        # Kill tmux window — prefer window ID (unique) over window name
+        if info.tmux_window_id:
+            with contextlib.suppress(Exception):
+                self.tmux.kill_window_by_id(self.session_name, info.tmux_window_id)
+        else:
+            win_name = self._window_name(branch)
+            with contextlib.suppress(Exception):
+                self.tmux.kill_window(self.session_name, win_name)
 
         # Remove git worktree
         with contextlib.suppress(Exception):
@@ -220,8 +235,12 @@ class WorktreeManager:
 
     def switch_to(self, branch: str) -> None:
         """Switch to the tmux window for a given branch."""
-        win_name = self._window_name(branch)
-        self.tmux.switch_to_window(self.session_name, win_name)
+        info = next((w for w in self.state.worktrees if w.branch == branch), None)
+        if info and info.tmux_window_id:
+            self.tmux.switch_to_window_by_id(self.session_name, info.tmux_window_id)
+        else:
+            win_name = self._window_name(branch)
+            self.tmux.switch_to_window(self.session_name, win_name)
 
     def list_active(self) -> list[WorktreeInfo]:
         """Return the list of active worktrees."""
