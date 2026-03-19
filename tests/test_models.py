@@ -67,3 +67,30 @@ def test_worktree_status_values() -> None:
     assert WorktreeStatus.IDLE == "idle"
     assert WorktreeStatus.ERROR == "error"
     assert WorktreeStatus.REMOVING == "removing"
+
+
+def test_worktree_info_index_default() -> None:
+    info = WorktreeInfo(branch="feat/a", path=Path("/tmp/wt"))
+    assert info.index == 0
+
+
+def test_worktree_info_index_serialization(tmp_path: Path, monkeypatch: object) -> None:
+    monkeypatch.setattr(  # type: ignore[attr-defined]
+        models_mod.SessionState,
+        "state_dir",
+        classmethod(lambda cls: tmp_path),
+    )
+
+    state = SessionState(
+        project_name="idx-test",
+        tmux_session_name="bouquet-idx-test",
+        repo_path=Path("/tmp/repo"),
+        worktrees=[
+            WorktreeInfo(branch="feat/x", path=Path("/tmp/wt/x"), index=5),
+        ],
+    )
+    state.save()
+
+    loaded = SessionState.load("idx-test")
+    assert loaded is not None
+    assert loaded.worktrees[0].index == 5

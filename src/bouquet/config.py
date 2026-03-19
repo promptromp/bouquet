@@ -35,8 +35,14 @@ class BootstrapConfig(BaseModel):
     direnv_allow: bool = True
 
 
+class ServiceConfig(BaseModel):
+    name: str
+    command: str
+
+
 class TmuxConfig(BaseModel):
     session_prefix: str = "bouquet"
+    layout: str | None = None
 
 
 class BouquetSettings(BaseSettings):
@@ -46,6 +52,7 @@ class BouquetSettings(BaseSettings):
     agent: AgentConfig = Field(default_factory=AgentConfig)
     bootstrap: BootstrapConfig = Field(default_factory=BootstrapConfig)
     tmux: TmuxConfig = Field(default_factory=TmuxConfig)
+    services: list[ServiceConfig] = Field(default_factory=list)
 
 
 def _load_toml(path: Path) -> dict[str, Any]:
@@ -113,4 +120,13 @@ direnv_allow = true
 
 [tmux]
 session_prefix = "bouquet"
+# layout = "main-vertical"   # tmux layout: main-vertical, tiled, even-horizontal, etc.
+
+# [[services]]
+# name = "api"
+# command = "uv run uvicorn app.main:app --reload --port {{{{ 8000 + BOUQUET_WORKTREE_INDEX }}}}"
+#
+# [[services]]
+# name = "frontend"
+# command = "npm run dev -- --port {{{{ 3000 + BOUQUET_WORKTREE_INDEX }}}}"
 """

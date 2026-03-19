@@ -24,6 +24,7 @@ class WorktreeInfo(BaseModel):
     tmux_window_id: str | None = None
     status: WorktreeStatus = WorktreeStatus.CREATING
     created_at: datetime = Field(default_factory=datetime.now)
+    index: int = 0
 
 
 class SessionState(BaseModel):
