@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import os
 from pathlib import Path
 
 from bouquet.bootstrap import _run_setup_and_capture_env, bootstrap_worktree
@@ -125,7 +124,9 @@ def test_bootstrap_env_passed_to_deps_command(tmp_path: Path, monkeypatch: objec
     config = BootstrapConfig(
         setup_commands=["export BOUQUET_DEPS_CHECK=it_works"],
         copy_env_files=[],
-        python_deps_command=f'python3 -c "import os; open(\'{marker}\', \'w\').write(os.environ.get(\'BOUQUET_DEPS_CHECK\', \'missing\'))"',
+        python_deps_command=(
+            f"python3 -c \"import os; open('{marker}', 'w').write(os.environ.get('BOUQUET_DEPS_CHECK', 'missing'))\""
+        ),
         node_deps_command="",
         use_cow_clone=False,
         direnv_allow=False,
