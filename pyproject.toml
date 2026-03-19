@@ -1,6 +1,5 @@
 [project]
 name = "bouquet"
-version = "0.1.0"
 description = "An orchestration layer for agentic coding"
 requires-python = ">=3.14"
 dependencies = [
@@ -10,16 +9,20 @@ dependencies = [
     "pydantic>=2.0",
     "pydantic-settings>=2.0",
 ]
+dynamic = ["version"]
 
 [project.scripts]
 bouquet = "bouquet.cli:cli"
 
 [build-system]
-requires = ["hatchling"]
-build-backend = "hatchling.build"
+requires = ["setuptools>=80", "setuptools-scm>=8"]
+build-backend = "setuptools.build_meta"
 
-[tool.hatch.build.targets.wheel]
-packages = ["src/bouquet"]
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.setuptools_scm]
+# can be empty if no extra settings are needed, presence enables setuptools-scm
 
 [tool.pytest.ini_options]
 asyncio_mode = "auto"
