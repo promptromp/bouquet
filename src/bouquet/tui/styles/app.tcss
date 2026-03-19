@@ -4,12 +4,13 @@ Screen {
 
 .project-header {
     dock: top;
-    height: 3;
+    height: auto;
+    max-height: 10;
     content-align: center middle;
     background: $accent;
     color: $text;
     text-style: bold;
-    padding: 1;
+    padding: 0 1;
 }
 
 #body {
