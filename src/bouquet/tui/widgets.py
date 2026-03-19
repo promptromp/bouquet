@@ -2,11 +2,35 @@
 
 from __future__ import annotations
 
+from rich.console import RenderableType
+from rich.table import Table
 from rich.text import Text
 from textual.app import ComposeResult
+from textual.widget import Widget
 from textual.widgets import DataTable, Static, TabbedContent, TabPane
 
 from bouquet.models import WorktreeInfo, WorktreeStatus
+
+
+_STATUS_STYLE: dict[WorktreeStatus, str] = {
+    WorktreeStatus.CREATING: "yellow",
+    WorktreeStatus.RUNNING: "green",
+    WorktreeStatus.WAITING: "yellow",
+    WorktreeStatus.ACTIVE: "cyan",
+    WorktreeStatus.IDLE: "dim",
+    WorktreeStatus.ERROR: "bold red",
+    WorktreeStatus.REMOVING: "yellow",
+}
+
+_STATUS_LABEL: dict[WorktreeStatus, str] = {
+    WorktreeStatus.CREATING: "creating…",
+    WorktreeStatus.RUNNING: "running",
+    WorktreeStatus.WAITING: "waiting",
+    WorktreeStatus.ACTIVE: "active",
+    WorktreeStatus.IDLE: "idle",
+    WorktreeStatus.ERROR: "ERROR",
+    WorktreeStatus.REMOVING: "removing…",
+}
 
 
 class ProjectHeader(Static):
@@ -54,6 +78,78 @@ class WorktreeTable(DataTable):
                 created,
                 key=wt.branch,
             )
+
+
+class WorktreeDetailPanel(Widget):
+    """Displays details about the currently highlighted worktree as a Rich table."""
+
+    _PLACEHOLDER = "Select a worktree to view details."
+
+    def __init__(self) -> None:
+        super().__init__()
+        self._current_branch: str | None = None
+        self._current_wt: WorktreeInfo | None = None
+        self._pr_cache: dict[str, str | None] = {}
+        self._pr_pending: set[str] = set()
+        self._rows: dict[str, str] = {}
+
+    def render(self) -> RenderableType:
+        if not self._rows:
+            return Text(self._PLACEHOLDER, style="dim")
+        table = Table(show_header=False, box=None, padding=(0, 1, 0, 0), expand=True)
+        table.add_column("label", style="dim", no_wrap=True, width=8)
+        table.add_column("value")
+        for label, value in self._rows.items():
+            table.add_row(label, value)
+        return table
+
+    def show_worktree(self, wt: WorktreeInfo | None) -> None:
+        """Update the panel to show details for the given worktree."""
+        self._current_wt = wt
+        if wt is None:
+            self._current_branch = None
+            self._rows = {}
+            self.refresh()
+            return
+        self._current_branch = wt.branch
+        self._rebuild_rows()
+
+    def _rebuild_rows(self) -> None:
+        """Rebuild the key-value rows from the current worktree."""
+        wt = self._current_wt
+        if wt is None:
+            return
+        status_label = _STATUS_LABEL.get(wt.status, wt.status.value)
+        status_style = _STATUS_STYLE.get(wt.status, "")
+        rows: dict[str, str] = {
+            "Branch": wt.branch,
+            "Status": f"[{status_style}]{status_label}[/{status_style}]" if status_style else status_label,
+            "Profile": wt.agent_profile or "default",
+            "Window": wt.tmux_window_id or "-",
+            "Path": str(wt.path),
+            "Created": wt.created_at.strftime("%Y-%m-%d %H:%M"),
+        }
+        # PR row
+        if wt.branch in self._pr_cache:
+            pr_url = self._pr_cache[wt.branch]
+            rows["PR"] = pr_url if pr_url else "[dim]No PR[/dim]"
+        elif wt.branch in self._pr_pending:
+            rows["PR"] = "[dim]Looking up…[/dim]"
+        self._rows = rows
+        self.refresh()
+
+    def mark_pr_pending(self, branch: str) -> None:
+        """Mark a PR lookup as in-flight."""
+        self._pr_pending.add(branch)
+        if branch == self._current_branch:
+            self._rebuild_rows()
+
+    def set_pr_url(self, branch: str, url: str | None) -> None:
+        """Cache a PR URL and re-render if this branch is currently shown."""
+        self._pr_cache[branch] = url
+        self._pr_pending.discard(branch)
+        if branch == self._current_branch:
+            self._rebuild_rows()
 
 
 class DetailTabs(TabbedContent):

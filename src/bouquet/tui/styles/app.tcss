@@ -41,6 +41,21 @@ Screen {
     color: $text-muted;
 }
 
+#detail-container {
+    height: auto;
+    min-height: 7;
+    max-height: 14;
+    margin-bottom: 1;
+    border: round $accent;
+    border-title-color: $text;
+    border-title-style: bold;
+}
+
+WorktreeDetailPanel {
+    height: auto;
+    padding: 0 1;
+}
+
 #task-queue-empty {
     height: 1fr;
     content-align: center middle;
