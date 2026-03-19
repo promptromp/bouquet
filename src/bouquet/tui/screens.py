@@ -213,26 +213,14 @@ class BroadcastResultsScreen(ModalScreen[None]):
         margin-bottom: 1;
     }
 
-    .result-branch {
-        text-style: bold;
-        color: $accent;
-        margin-top: 1;
-    }
-
-    .result-error {
-        text-style: bold;
-        color: $error;
+    .result-header {
+        text-style: bold underline;
         margin-top: 1;
     }
 
     .result-body {
         margin-left: 2;
         margin-bottom: 1;
-    }
-
-    .result-meta {
-        margin-left: 2;
-        color: $text-muted;
     }
     """
 
@@ -251,10 +239,12 @@ class BroadcastResultsScreen(ModalScreen[None]):
                     duration = f"{resp.duration_ms / 1000:.1f}s" if resp.duration_ms else "?"
                     cost = f"  ${resp.cost_usd:.4f}" if resp.cost_usd else ""
                     if resp.ok:
-                        yield Static(f"[{branch}] ({duration}{cost})", classes="result-branch")
+                        header = f"{branch}  ({duration}{cost})"
+                        yield Static(header, classes="result-header", markup=False)
                         yield Static(resp.result[:2000] if resp.result else "(empty response)", classes="result-body")
                     else:
-                        yield Static(f"[{branch}] ERROR ({duration}{cost})", classes="result-error")
+                        header = f"{branch}  ERROR ({duration}{cost})"
+                        yield Static(header, classes="result-header", markup=False)
                         yield Static(resp.error or "Unknown error", classes="result-body")
             yield Button("Close", variant="primary", id="close-btn")
 
