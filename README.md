@@ -4,8 +4,6 @@
 
 # bouquet
 
---------------------------------------------------------------------------------
-
 [![CI](https://github.com/promptromp/bouquet/actions/workflows/ci.yml/badge.svg)](https://github.com/promptromp/bouquet/actions/workflows/ci.yml)
 
 > **Warning — Alpha Software**
