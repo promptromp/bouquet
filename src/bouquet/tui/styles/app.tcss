@@ -26,14 +26,6 @@ Screen {
     height: 1fr;
 }
 
-#footer-bar {
-    dock: bottom;
-    height: 3;
-    background: $surface;
-    padding: 1;
-    content-align: center middle;
-}
-
 #status-line {
     dock: bottom;
     height: 1;
