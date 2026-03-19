@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import contextlib
 import os
 import shutil
 from pathlib import Path
@@ -41,6 +42,13 @@ class TmuxManager:
             kwargs["start_directory"] = str(start_directory)
 
         session = self.server.new_session(**kwargs)
+
+        # Clear Python venv env vars inherited from bouquet's own venv,
+        # so worktree windows don't get confused by stale VIRTUAL_ENV.
+        for var in ("VIRTUAL_ENV", "VIRTUAL_ENV_PROMPT"):
+            with contextlib.suppress(Exception):
+                session.remove_environment(var)
+
         return session
 
     def get_session(self, session_name: str) -> libtmux.Session:
