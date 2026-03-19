@@ -8,6 +8,50 @@ from textual.screen import ModalScreen
 from textual.widgets import Button, Input, Label
 
 
+class ConfirmQuitScreen(ModalScreen[bool]):
+    """Confirmation dialog before quitting and killing the tmux session."""
+
+    CSS = """
+    ConfirmQuitScreen {
+        align: center middle;
+    }
+
+    #quit-dialog {
+        width: 64;
+        height: auto;
+        padding: 1 2;
+        border: thick $error;
+        background: $surface;
+    }
+
+    #quit-dialog Label {
+        margin-bottom: 1;
+    }
+
+    .button-row {
+        layout: horizontal;
+        height: auto;
+        margin-top: 1;
+    }
+
+    .button-row Button {
+        margin-right: 1;
+    }
+    """
+
+    def compose(self) -> ComposeResult:
+        with Vertical(id="quit-dialog"):
+            yield Label("Quit Bouquet?")
+            yield Label("This will kill the tmux session and all agent windows.")
+            yield Label("Git worktrees will be left in place.")
+            with Vertical(classes="button-row"):
+                yield Button("Quit", variant="error", id="confirm-quit-btn")
+                yield Button("Cancel", variant="default", id="cancel-quit-btn")
+
+    def on_button_pressed(self, event: Button.Pressed) -> None:
+        self.dismiss(event.button.id == "confirm-quit-btn")
+
+
 class NewWorktreeScreen(ModalScreen[tuple[str, str] | None]):
     """Modal dialog for creating a new worktree."""
 
