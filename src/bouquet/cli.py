@@ -10,7 +10,7 @@ import click
 
 from bouquet import __version__
 from bouquet.config import TEMPLATE_CONFIG, BouquetSettings, load_config
-from bouquet.git import is_git_repo
+from bouquet.git import get_repo_root, is_git_repo
 from bouquet.models import SessionState
 from bouquet.tmux import TmuxManager
 from bouquet.worktree import WorktreeManager
@@ -23,30 +23,27 @@ def cli() -> None:
 
 
 @cli.command()
-@click.argument("project_name")
+@click.argument("project_name", required=False, default=None)
 @click.option("--repo", type=click.Path(exists=True, path_type=Path), default=None)
 @click.option("--config", "config_path", type=click.Path(exists=True, path_type=Path), default=None)
-def start(project_name: str, repo: Path | None, config_path: Path | None) -> None:
+def start(project_name: str | None, repo: Path | None, config_path: Path | None) -> None:
     """Start a Bouquet session for a project.
 
     Creates a tmux session with an orchestrator TUI for managing
     worktree-backed coding windows.
+
+    When run without arguments, uses the current directory as the repo
+    and reads project name from .bouquet.toml.
     """
+    # Resolve repo path: explicit --repo, or cwd
+    repo_path = _resolve_repo_path(repo)
+
     # Load config
-    settings = load_config(config_path=config_path, repo_path=repo)
+    settings = load_config(config_path=config_path, repo_path=repo_path)
 
-    # Override project name from CLI
+    # Resolve project name: explicit arg > config file > error
+    project_name = _resolve_project_name(project_name, settings, repo_path)
     settings.project.name = project_name
-
-    # Resolve repo path
-    repo_path = Path(settings.project.repo_path).resolve()
-    if not repo_path.exists():
-        click.echo(f"Error: repo path '{repo_path}' does not exist.", err=True)
-        sys.exit(1)
-    if not is_git_repo(repo_path):
-        click.echo(f"Error: '{repo_path}' is not a git repository.", err=True)
-        sys.exit(1)
-
     settings.project.repo_path = str(repo_path)
 
     # Build session name
@@ -94,6 +91,46 @@ def start(project_name: str, repo: Path | None, config_path: Path | None) -> Non
     tmux.attach_session(session_name)
 
 
+def _resolve_repo_path(repo: Path | None) -> Path:
+    """Resolve the repository path from --repo or cwd, validating it's a git repo root."""
+    if repo is not None:
+        repo_path = repo.resolve()
+    else:
+        cwd = Path.cwd().resolve()
+        if not is_git_repo(cwd):
+            click.echo(
+                "Error: current directory is not a git repository. Run from a repo root or pass --repo.",
+                err=True,
+            )
+            sys.exit(1)
+        repo_path = get_repo_root(cwd)
+
+    if not repo_path.exists():
+        click.echo(f"Error: repo path '{repo_path}' does not exist.", err=True)
+        sys.exit(1)
+    if not is_git_repo(repo_path):
+        click.echo(f"Error: '{repo_path}' is not a git repository.", err=True)
+        sys.exit(1)
+    return repo_path
+
+
+def _resolve_project_name(name: str | None, settings: BouquetSettings, repo_path: Path) -> str:
+    """Resolve the project name from CLI arg, config, or error out."""
+    if name is not None:
+        return name
+
+    # Config file provided a non-default name
+    if settings.project.name != "default":
+        return settings.project.name
+
+    # No config found — error
+    click.echo(
+        "Error: no project name given and no .bouquet.toml found. Run 'bouquet init' first or pass a project name.",
+        err=True,
+    )
+    sys.exit(1)
+
+
 def _build_tui_command(config_path: Path | None, repo_path: Path) -> str:
     """Build the shell command to launch the TUI."""
     parts = [sys.executable, "-m", "bouquet.tui.app", "--repo", str(repo_path)]
@@ -103,9 +140,20 @@ def _build_tui_command(config_path: Path | None, repo_path: Path) -> str:
 
 
 @cli.command()
-@click.argument("project_name")
-def stop(project_name: str) -> None:
-    """Stop a Bouquet session — remove worktrees and kill tmux session."""
+@click.argument("project_name", required=False, default=None)
+@click.option("--repo", type=click.Path(exists=True, path_type=Path), default=None)
+@click.option("--config", "config_path", type=click.Path(exists=True, path_type=Path), default=None)
+def stop(project_name: str | None, repo: Path | None, config_path: Path | None) -> None:
+    """Stop a Bouquet session — remove worktrees and kill tmux session.
+
+    When run without arguments, infers the project name from .bouquet.toml
+    in the current directory.
+    """
+    if project_name is None:
+        repo_path = _resolve_repo_path(repo)
+        settings = load_config(config_path=config_path, repo_path=repo_path)
+        project_name = _resolve_project_name(None, settings, repo_path)
+
     state = SessionState.load(project_name)
     if state is None:
         click.echo(f"No session state found for '{project_name}'.", err=True)
@@ -148,4 +196,4 @@ def init(repo: Path | None) -> None:
     click.echo(f"Created {config_file}")
     click.echo()
     click.echo("Edit the file to customize your project settings, then run:")
-    click.echo(f"  bouquet start {project_name}")
+    click.echo("  bouquet start")
