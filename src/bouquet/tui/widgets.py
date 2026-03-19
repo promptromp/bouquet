@@ -7,12 +7,13 @@ from textual.widgets import DataTable, Static
 from bouquet.models import WorktreeInfo, WorktreeStatus
 
 
-_LOGO = r"""
- _                       _
-| |_ ___ _ _ ___ _ _ ___| |_
-| . | . | | | . | | | -_|  _|
-|___|___|___|_  |___|___|_|
-              |_|"""
+_LOGO = (
+    " _                       _\n"
+    "| |_ ___ _ _ ___ _ _ ___| |_\n"
+    "| . | . | | | . | | | -_|  _|\n"
+    "|___|___|___|_  |___|___|_|\n"
+    "              |_|"
+)
 
 
 class ProjectHeader(Static):
