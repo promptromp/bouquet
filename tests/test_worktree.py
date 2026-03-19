@@ -91,7 +91,7 @@ def test_list_active(manager: WorktreeManager) -> None:
 
 
 def test_adopt_existing(manager: WorktreeManager, tmp_git_repo: Path) -> None:
-    """adopt_existing should discover pre-existing git worktrees."""
+    """adopt_existing should fully initialise adopted worktrees (window + agent)."""
     # Create a worktree outside of bouquet (simulating manual creation)
     wt_path = tmp_git_repo.parent / "manual-worktree"
     git_create_worktree(tmp_git_repo, wt_path, "feature/manual", "main")
@@ -106,6 +106,11 @@ def test_adopt_existing(manager: WorktreeManager, tmp_git_repo: Path) -> None:
 
     # Should now appear in list_active
     assert len(manager.list_active()) == 1
+
+    # Verify agent was launched in the adopted worktree
+    mock_tmux = manager.tmux
+    assert isinstance(mock_tmux, MagicMock)
+    mock_tmux.send_keys_to_window_id.assert_called_once()
 
 
 def test_adopt_existing_skips_main_worktree(manager: WorktreeManager) -> None:

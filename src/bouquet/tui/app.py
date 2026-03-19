@@ -2,9 +2,10 @@
 
 from __future__ import annotations
 
-import asyncio
+import hashlib
 import os
 import sys
+import time
 from pathlib import Path
 
 import click
@@ -15,7 +16,7 @@ from textual.containers import Vertical
 from textual.widgets import Footer, Static
 
 from bouquet.activity import POLLABLE_STATUSES, ActivityMonitor
-from bouquet.agents import AgentAdapter, ClaudeCodeAdapter
+from bouquet.agents.base import AgentResponse
 from bouquet.config import BouquetSettings, load_config
 from bouquet.models import SessionState, WorktreeInfo, WorktreeStatus
 from bouquet.tmux import TmuxManager
@@ -28,6 +29,22 @@ from bouquet.tui.screens import (
 )
 from bouquet.tui.widgets import ProjectHeader, WorktreeTable
 from bouquet.worktree import WorktreeManager
+
+
+def _extract_response(content: str, prompt: str) -> str:
+    """Extract the agent's response from captured pane content.
+
+    Looks for the sent prompt in the pane output and returns everything
+    after it.  Falls back to the last 30 non-empty lines.
+    """
+    lines = content.splitlines()
+    prompt_prefix = prompt[:50]
+    for i, line in enumerate(lines):
+        if prompt_prefix in line:
+            return "\n".join(lines[i + 1 :]).strip()
+    # Fallback: last 30 non-empty lines
+    recent = [line for line in lines if line.strip()][-30:]
+    return "\n".join(recent).strip()
 
 
 class OrchestratorApp(App):
@@ -51,13 +68,11 @@ class OrchestratorApp(App):
         settings: BouquetSettings,
         state: SessionState,
         manager: WorktreeManager,
-        agent: AgentAdapter | None = None,
     ) -> None:
         super().__init__()
         self.settings = settings
         self.session_state = state
         self.manager = manager
-        self.agent = agent or ClaudeCodeAdapter(max_turns=3)
         self._activity_monitor = ActivityMonitor(manager.tmux)
         self._polling = False
 
@@ -75,6 +90,10 @@ class OrchestratorApp(App):
     def _refresh_table(self) -> None:
         table = self.query_one(WorktreeTable)
         table.refresh_worktrees(self.manager.list_active())
+
+    def _sendable_worktrees(self) -> list[WorktreeInfo]:
+        """Return worktrees that have a tmux window and are in a pollable state."""
+        return [wt for wt in self.session_state.worktrees if wt.tmux_window_id and wt.status in POLLABLE_STATUSES]
 
     # --- Activity polling ---
 
@@ -187,11 +206,7 @@ class OrchestratorApp(App):
             self.call_from_thread(self._refresh_table)
             self.call_from_thread(self.notify, f"Error removing worktree: {e}", severity="error")
 
-    # --- Broadcast (claude -p) ---
-
-    def _active_worktree_targets(self) -> list[tuple[str, Path]]:
-        """Return (branch, path) pairs for all active worktrees."""
-        return [(wt.branch, wt.path) for wt in self.session_state.worktrees if wt.status in POLLABLE_STATUSES]
+    # --- Broadcast (send-keys to all agents) ---
 
     def action_broadcast(self) -> None:
         """Open a dialog to broadcast a prompt to all agents."""
@@ -202,29 +217,117 @@ class OrchestratorApp(App):
 
         self.push_screen(BroadcastInputScreen(), callback=on_prompt)
 
-    def action_status(self) -> None:
-        """Ask all agents to summarize their current progress."""
-        targets = self._active_worktree_targets()
-        if not targets:
-            self.notify("No active worktrees", severity="warning")
-            return
-        self.notify(f"Requesting status from {len(targets)} agent(s)...")
-        self._run_broadcast(
-            "Briefly summarize your current progress and state in 2-3 sentences. "
-            "What are you working on, what have you done, and what remains?"
-        )
-
     @work(thread=True)
     def _run_broadcast(self, prompt: str) -> None:
-        """Send *prompt* to all active worktrees and show results."""
-        targets = self._active_worktree_targets()
+        """Send *prompt* to all active agents via tmux send-keys."""
+        targets = self._sendable_worktrees()
         if not targets:
             self.call_from_thread(self.notify, "No active worktrees", severity="warning")
             return
 
-        self.call_from_thread(self.notify, f"Broadcasting to {len(targets)} agent(s)...")
+        errors = 0
+        for wt in targets:
+            try:
+                self.manager.tmux.send_keys_to_window_id(
+                    self.session_state.tmux_session_name,
+                    wt.tmux_window_id,  # type: ignore[arg-type]
+                    prompt,
+                )
+            except Exception as e:
+                self.call_from_thread(self.notify, f"Error sending to {wt.branch}: {e}", severity="error")
+                errors += 1
 
-        responses = asyncio.run(self.agent.broadcast(prompt, targets, timeout=120))
+        sent = len(targets) - errors
+        if sent > 0:
+            self.call_from_thread(self.notify, f"Sent to {sent} agent(s)")
+
+    # --- Status (send-keys + capture pane responses) ---
+
+    def action_status(self) -> None:
+        """Ask all agents to summarize their current progress."""
+        targets = self._sendable_worktrees()
+        if not targets:
+            self.notify("No active worktrees", severity="warning")
+            return
+        self.notify(f"Requesting status from {len(targets)} agent(s)...")
+        self._run_status()
+
+    @work(thread=True)
+    def _run_status(self) -> None:
+        """Send status prompt via send-keys, poll for completion, capture responses."""
+        targets = self._sendable_worktrees()
+        if not targets:
+            self.call_from_thread(self.notify, "No active worktrees", severity="warning")
+            return
+
+        prompt = (
+            "Briefly summarize your current progress and state in 2-3 sentences. "
+            "What are you working on, what have you done, and what remains?"
+        )
+        session = self.session_state.tmux_session_name
+        start = time.monotonic()
+
+        # 1. Send prompt to all agents
+        sent: list[WorktreeInfo] = []
+        for wt in targets:
+            try:
+                self.manager.tmux.send_keys_to_window_id(session, wt.tmux_window_id, prompt)  # type: ignore[arg-type]
+                sent.append(wt)
+            except Exception:
+                pass
+
+        if not sent:
+            self.call_from_thread(self.notify, "Failed to send status request", severity="error")
+            return
+
+        # 2. Poll until all agents stabilize (or timeout)
+        hashes: dict[str, str] = {}
+        stable_counts: dict[str, int] = {}
+        max_wait = 120
+        elapsed = 0
+        stability_threshold = 3
+
+        time.sleep(3)  # initial wait for agents to start responding
+
+        while elapsed < max_wait:
+            all_stable = True
+            for wt in sent:
+                try:
+                    content = self.manager.tmux.capture_pane(session, wt.tmux_window_id)  # type: ignore[arg-type]
+                except Exception:
+                    continue
+                h = hashlib.sha256(content.encode()).hexdigest()
+                prev = hashes.get(wt.branch)
+                hashes[wt.branch] = h
+                if prev is None or h != prev:
+                    stable_counts[wt.branch] = 0
+                    all_stable = False
+                else:
+                    stable_counts[wt.branch] = stable_counts.get(wt.branch, 0) + 1
+                    if stable_counts[wt.branch] < stability_threshold:
+                        all_stable = False
+            if all_stable:
+                break
+            time.sleep(2)
+            elapsed += 2
+
+        duration_ms = int((time.monotonic() - start) * 1000)
+
+        # 3. Capture final pane content and build responses
+        responses: list[AgentResponse] = []
+        for wt in sent:
+            try:
+                content = self.manager.tmux.capture_pane(session, wt.tmux_window_id)  # type: ignore[arg-type]
+            except Exception:
+                content = ""
+            response_text = _extract_response(content, prompt)
+            responses.append(
+                AgentResponse(
+                    worktree_branch=wt.branch,
+                    result=response_text or "(no response captured)",
+                    duration_ms=duration_ms,
+                )
+            )
 
         def show_results() -> None:
             self.push_screen(BroadcastResultsScreen(responses))
@@ -252,9 +355,7 @@ class OrchestratorApp(App):
         """Send a prompt via tmux send-keys to one or all agent terminals."""
         targets: list[WorktreeInfo] = []
         if send_to_all:
-            targets = [
-                wt for wt in self.session_state.worktrees if wt.tmux_window_id and wt.status in POLLABLE_STATUSES
-            ]
+            targets = self._sendable_worktrees()
         elif selected_branch:
             wt = next(
                 (w for w in self.session_state.worktrees if w.branch == selected_branch and w.tmux_window_id),

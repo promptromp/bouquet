@@ -182,7 +182,7 @@ class BroadcastInputScreen(ModalScreen[str | None]):
     def compose(self) -> ComposeResult:
         with Vertical(id="broadcast-dialog"):
             yield Label("Broadcast to All Agents")
-            yield Label("This will send a prompt to all active worktrees via claude -p.")
+            yield Label("This will send a prompt to all active agent terminals.")
             yield Label("Prompt:")
             yield Input(
                 value=self._default_prompt,
