@@ -46,14 +46,19 @@ class WorktreeManager:
         base = base_branch or self.settings.project.base_branch
         wt_path = self._worktree_path(branch)
 
-        # Create worktree info and track it
-        info = WorktreeInfo(
-            branch=branch,
-            path=wt_path,
-            status=WorktreeStatus.CREATING,
-            created_at=datetime.now(),
-        )
-        self.state.worktrees.append(info)
+        # Reuse a pre-registered placeholder (from TUI) or create a new entry
+        info = next((w for w in self.state.worktrees if w.branch == branch), None)
+        if info is not None:
+            info.path = wt_path
+            info.status = WorktreeStatus.CREATING
+        else:
+            info = WorktreeInfo(
+                branch=branch,
+                path=wt_path,
+                status=WorktreeStatus.CREATING,
+                created_at=datetime.now(),
+            )
+            self.state.worktrees.append(info)
         self.state.save()
 
         try:
