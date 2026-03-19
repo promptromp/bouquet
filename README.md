@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="docs/logo.png" alt="bouquet logo" width="400">
+  <img src="docs/logo.png" alt="bouquet logo" width="320">
 </p>
 
 # bouquet
