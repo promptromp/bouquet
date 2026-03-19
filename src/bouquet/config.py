@@ -28,10 +28,11 @@ class AgentConfig(BaseModel):
 
 
 class BootstrapConfig(BaseModel):
-    copy_env_files: list[str] = Field(default_factory=lambda: [".env", ".env.local"])
-    python_deps_command: str = "uv sync --frozen"
+    copy_env_files: list[str] = Field(default_factory=lambda: [".env", ".env.local", ".envrc"])
+    python_deps_command: str = "uv sync"
     node_deps_command: str = "pnpm install"
     use_cow_clone: bool = True
+    direnv_allow: bool = True
 
 
 class TmuxConfig(BaseModel):
@@ -104,10 +105,11 @@ command = "claude"
 args = []
 
 [bootstrap]
-copy_env_files = [".env", ".env.local"]
-python_deps_command = "uv sync --frozen"
+copy_env_files = [".env", ".env.local", ".envrc"]
+python_deps_command = "uv sync"
 node_deps_command = "pnpm install"
 use_cow_clone = true
+direnv_allow = true
 
 [tmux]
 session_prefix = "bouquet"

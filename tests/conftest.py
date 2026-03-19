@@ -74,6 +74,7 @@ copy_env_files = []
 python_deps_command = ""
 node_deps_command = ""
 use_cow_clone = false
+direnv_allow = false
 
 [tmux]
 session_prefix = "bouquet"
