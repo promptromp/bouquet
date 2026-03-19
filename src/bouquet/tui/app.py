@@ -28,7 +28,7 @@ class OrchestratorApp(App):
 
     BINDINGS = [
         Binding("n", "new_worktree", "New worktree"),
-        Binding("enter", "switch_worktree", "Switch to window"),
+        Binding("s", "switch_worktree", "Switch to window"),
         Binding("d", "delete_worktree", "Delete worktree"),
         Binding("r", "refresh", "Refresh"),
         Binding("q", "quit", "Quit"),
@@ -51,7 +51,7 @@ class OrchestratorApp(App):
             yield Static("Active Worktrees", id="section-title")
             yield WorktreeTable()
         yield Static(
-            "[N] New worktree  [Enter] Switch  [D] Delete  [R] Refresh  [Q] Quit",
+            "[N] New  [Enter/S] Switch  [D] Delete  [R] Refresh  [Q] Quit",
             id="footer-bar",
         )
         yield Footer()
@@ -95,16 +95,26 @@ class OrchestratorApp(App):
             self.call_from_thread(self._refresh_table)
             self.call_from_thread(self.notify, f"Error creating worktree: {e}", severity="error")
 
+    def on_data_table_row_selected(self, event: WorktreeTable.RowSelected) -> None:
+        """Handle Enter on a table row — switch to that worktree's tmux window."""
+        row_data = event.data_table.get_row(event.row_key)
+        branch = str(row_data[1])  # Column 1 is Branch
+        self._switch_to_branch(branch)
+
     def action_switch_worktree(self) -> None:
-        """Switch to the tmux window for the selected worktree."""
+        """Switch to the tmux window for the currently highlighted worktree."""
         table = self.query_one(WorktreeTable)
         if table.cursor_row is not None and table.row_count > 0:
             row_data = table.get_row_at(table.cursor_row)
             branch = str(row_data[1])  # Column 1 is Branch
-            try:
-                self.manager.switch_to(branch)
-            except Exception as e:
-                self.notify(f"Error switching: {e}", severity="error")
+            self._switch_to_branch(branch)
+
+    def _switch_to_branch(self, branch: str) -> None:
+        """Switch to the tmux window for the given branch."""
+        try:
+            self.manager.switch_to(branch)
+        except Exception as e:
+            self.notify(f"Error switching: {e}", severity="error")
 
     def action_delete_worktree(self) -> None:
         """Delete the selected worktree."""
