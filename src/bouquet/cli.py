@@ -79,6 +79,13 @@ def start(project_name: str, repo: Path | None, config_path: Path | None) -> Non
     # Create tmux session
     tmux.create_session(session_name, start_directory=repo_path)
 
+    # Adopt any existing git worktrees into the session
+    manager = WorktreeManager(settings, state, tmux)
+    adopted = manager.adopt_existing()
+    if adopted:
+        branches = [w.branch for w in adopted]
+        click.echo(f"Adopted {len(adopted)} existing worktree(s): {', '.join(branches)}")
+
     # Build the command to launch the TUI in window 0
     tui_cmd = _build_tui_command(config_path, repo_path)
     tmux.send_keys(session_name, "orchestrator", tui_cmd)

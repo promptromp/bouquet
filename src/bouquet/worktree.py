@@ -98,6 +98,61 @@ class WorktreeManager:
 
         return info
 
+    def adopt_existing(self) -> list[WorktreeInfo]:
+        """Discover existing git worktrees and adopt them into the session.
+
+        Introspects `git worktree list`, skips the main worktree (the repo
+        itself), and creates tmux windows for any others found. This lets
+        bouquet pick up worktrees created manually or from a previous session.
+        """
+        existing_branches = {w.branch for w in self.state.worktrees}
+        git_worktrees = git.list_worktrees(self.repo_path)
+        adopted: list[WorktreeInfo] = []
+
+        for wt in git_worktrees:
+            wt_path = Path(wt.get("path", ""))
+            branch = wt.get("branch", "")
+
+            # Skip the main worktree (the repo itself)
+            if wt_path.resolve() == self.repo_path.resolve():
+                continue
+
+            # Skip bare/detached worktrees
+            if not branch or wt.get("bare") or wt.get("detached"):
+                continue
+
+            # Skip worktrees we already track
+            if branch in existing_branches:
+                continue
+
+            # Adopt this worktree
+            info = WorktreeInfo(
+                branch=branch,
+                path=wt_path,
+                status=WorktreeStatus.ACTIVE,
+                created_at=datetime.now(),
+            )
+
+            # Create a tmux window for it
+            win_name = self._window_name(branch)
+            try:
+                window = self.tmux.create_window(
+                    session_name=self.session_name,
+                    window_name=win_name,
+                    start_directory=wt_path,
+                )
+                info.tmux_window_id = window.window_id
+            except Exception:
+                info.status = WorktreeStatus.IDLE
+
+            self.state.worktrees.append(info)
+            adopted.append(info)
+
+        if adopted:
+            self.state.save()
+
+        return adopted
+
     def remove(self, branch: str) -> None:
         """Remove a worktree and its associated tmux window."""
         # Find the worktree info
