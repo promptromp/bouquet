@@ -50,7 +50,7 @@ Config search order: `--config` flag → `.bouquet.toml` in repo root → `~/.co
 
 ## Code Style
 
-- Line length: 120, target Python 3.12
+- Line length: 120, target Python 3.14
 - Ruff rules: E, F, UP, B, SIM, I, PLC
 - Double quotes, isort with `combine-as-imports`, 2 blank lines after imports
 - First-party package: `bouquet`
