@@ -14,7 +14,7 @@ from textual.containers import Vertical
 from textual.widgets import Footer, Static
 
 from bouquet.config import BouquetSettings, load_config
-from bouquet.models import SessionState
+from bouquet.models import SessionState, WorktreeInfo, WorktreeStatus
 from bouquet.tmux import TmuxManager
 from bouquet.tui.screens import ConfirmQuitScreen, NewWorktreeScreen
 from bouquet.tui.widgets import ProjectHeader, WorktreeTable
@@ -70,6 +70,14 @@ class OrchestratorApp(App):
         def on_result(result: tuple[str, str] | None) -> None:
             if result is not None:
                 branch, base_branch = result
+                # Add a CREATING placeholder immediately so the user sees feedback
+                placeholder = WorktreeInfo(
+                    branch=branch,
+                    path=Path("."),
+                    status=WorktreeStatus.CREATING,
+                )
+                self.session_state.worktrees.append(placeholder)
+                self._refresh_table()
                 self._create_worktree(branch, base_branch)
 
         self.push_screen(NewWorktreeScreen(default_base=base), callback=on_result)
@@ -82,6 +90,9 @@ class OrchestratorApp(App):
             self.call_from_thread(self._refresh_table)
             self.call_from_thread(self.notify, f"Worktree '{branch}' created")
         except Exception as e:
+            # Remove the placeholder on error
+            self.session_state.worktrees = [w for w in self.session_state.worktrees if w.branch != branch]
+            self.call_from_thread(self._refresh_table)
             self.call_from_thread(self.notify, f"Error creating worktree: {e}", severity="error")
 
     def action_switch_worktree(self) -> None:
@@ -101,6 +112,11 @@ class OrchestratorApp(App):
         if table.cursor_row is not None and table.row_count > 0:
             row_data = table.get_row_at(table.cursor_row)
             branch = str(row_data[1])  # Column 1 is Branch
+            # Show REMOVING status immediately
+            info = next((w for w in self.session_state.worktrees if w.branch == branch), None)
+            if info:
+                info.status = WorktreeStatus.REMOVING
+                self._refresh_table()
             self._remove_worktree(branch)
 
     @work(thread=True)
@@ -111,6 +127,7 @@ class OrchestratorApp(App):
             self.call_from_thread(self._refresh_table)
             self.call_from_thread(self.notify, f"Worktree '{branch}' removed")
         except Exception as e:
+            self.call_from_thread(self._refresh_table)
             self.call_from_thread(self.notify, f"Error removing worktree: {e}", severity="error")
 
     async def action_quit(self) -> None:

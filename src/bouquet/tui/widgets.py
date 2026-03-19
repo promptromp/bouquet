@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from textual.widgets import DataTable, Static
 
-from bouquet.models import WorktreeInfo
+from bouquet.models import WorktreeInfo, WorktreeStatus
 
 
 class ProjectHeader(Static):
@@ -25,16 +25,23 @@ class WorktreeTable(DataTable):
     def on_mount(self) -> None:
         self.add_columns("#", "Branch", "Status", "Window", "Created")
 
+    _STATUS_DISPLAY = {
+        WorktreeStatus.CREATING: "creating...",
+        WorktreeStatus.REMOVING: "removing...",
+        WorktreeStatus.ERROR: "ERROR",
+    }
+
     def refresh_worktrees(self, worktrees: list[WorktreeInfo]) -> None:
         """Clear and repopulate the table with current worktree data."""
         self.clear()
         for i, wt in enumerate(worktrees, 1):
             created = wt.created_at.strftime("%m-%d %H:%M")
             window_id = wt.tmux_window_id or "-"
+            status = self._STATUS_DISPLAY.get(wt.status, wt.status.value)
             self.add_row(
                 str(i),
                 wt.branch,
-                wt.status.value,
+                status,
                 window_id,
                 created,
                 key=wt.branch,
