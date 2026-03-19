@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 import os
 import sys
 from pathlib import Path
@@ -13,10 +14,11 @@ from textual.binding import Binding
 from textual.containers import Vertical
 from textual.widgets import Footer, Static
 
+from bouquet.agents import AgentAdapter, ClaudeCodeAdapter
 from bouquet.config import BouquetSettings, load_config
 from bouquet.models import SessionState, WorktreeInfo, WorktreeStatus
 from bouquet.tmux import TmuxManager
-from bouquet.tui.screens import ConfirmQuitScreen, NewWorktreeScreen
+from bouquet.tui.screens import BroadcastInputScreen, BroadcastResultsScreen, ConfirmQuitScreen, NewWorktreeScreen
 from bouquet.tui.widgets import ProjectHeader, WorktreeTable
 from bouquet.worktree import WorktreeManager
 
@@ -30,6 +32,8 @@ class OrchestratorApp(App):
         Binding("n", "new_worktree", "New worktree"),
         Binding("s", "switch_worktree", "Switch to window"),
         Binding("d", "delete_worktree", "Delete worktree"),
+        Binding("b", "broadcast", "Broadcast"),
+        Binding("t", "status", "Status"),
         Binding("r", "refresh", "Refresh"),
         Binding("q", "quit", "Quit"),
     ]
@@ -39,11 +43,13 @@ class OrchestratorApp(App):
         settings: BouquetSettings,
         state: SessionState,
         manager: WorktreeManager,
+        agent: AgentAdapter | None = None,
     ) -> None:
         super().__init__()
         self.settings = settings
         self.session_state = state
         self.manager = manager
+        self.agent = agent or ClaudeCodeAdapter(max_turns=3)
 
     def compose(self) -> ComposeResult:
         yield ProjectHeader(self.settings.project.name)
@@ -135,6 +141,48 @@ class OrchestratorApp(App):
         except Exception as e:
             self.call_from_thread(self._refresh_table)
             self.call_from_thread(self.notify, f"Error removing worktree: {e}", severity="error")
+
+    def _active_worktree_targets(self) -> list[tuple[str, Path]]:
+        """Return (branch, path) pairs for all active worktrees."""
+        return [(wt.branch, wt.path) for wt in self.session_state.worktrees if wt.status == WorktreeStatus.ACTIVE]
+
+    def action_broadcast(self) -> None:
+        """Open a dialog to broadcast a prompt to all agents."""
+
+        def on_prompt(prompt: str | None) -> None:
+            if prompt:
+                self._run_broadcast(prompt)
+
+        self.push_screen(BroadcastInputScreen(), callback=on_prompt)
+
+    def action_status(self) -> None:
+        """Ask all agents to summarize their current progress."""
+        targets = self._active_worktree_targets()
+        if not targets:
+            self.notify("No active worktrees", severity="warning")
+            return
+        self.notify(f"Requesting status from {len(targets)} agent(s)...")
+        self._run_broadcast(
+            "Briefly summarize your current progress and state in 2-3 sentences. "
+            "What are you working on, what have you done, and what remains?"
+        )
+
+    @work(thread=True)
+    def _run_broadcast(self, prompt: str) -> None:
+        """Send *prompt* to all active worktrees and show results."""
+        targets = self._active_worktree_targets()
+        if not targets:
+            self.call_from_thread(self.notify, "No active worktrees", severity="warning")
+            return
+
+        self.call_from_thread(self.notify, f"Broadcasting to {len(targets)} agent(s)...")
+
+        responses = asyncio.run(self.agent.broadcast(prompt, targets, timeout=120))
+
+        def show_results() -> None:
+            self.push_screen(BroadcastResultsScreen(responses))
+
+        self.call_from_thread(show_results)
 
     async def action_quit(self) -> None:
         """Show confirmation dialog before quitting."""
