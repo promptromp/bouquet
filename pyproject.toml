@@ -1,6 +1,18 @@
 [project]
 name = "bouquet"
 description = "An orchestration layer for agentic coding"
+readme = "README.md"
+license = "MIT"
+license-files = ["LICEN[CS]E*"]
+authors = [{ name = "Adam Ever-Hadani" }]
+keywords = ["agents", "orchestration", "tmux", "worktree", "cli"]
+classifiers = [
+    "Environment :: Console",
+    "Intended Audience :: Developers",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.14",
+    "Topic :: Software Development :: Libraries",
+]
 requires-python = ">=3.14"
 dependencies = [
     "click>=8.1",
