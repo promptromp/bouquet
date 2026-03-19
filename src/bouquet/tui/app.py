@@ -89,11 +89,13 @@ class OrchestratorApp(App):
             with Vertical(id="right-panel"):
                 with Vertical(id="detail-container"):
                     yield WorktreeDetailPanel()
-                yield DetailTabs()
+                with Vertical(id="tasks-container"):
+                    yield DetailTabs()
         yield Footer()
 
     def on_mount(self) -> None:
         self.query_one("#detail-container").border_title = "Details"
+        self.query_one("#tasks-container").border_title = "Tasks"
         self._refresh_table()
         self.set_interval(2.0, self._poll_activity)
 

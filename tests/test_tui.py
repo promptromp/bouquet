@@ -5,10 +5,13 @@ from __future__ import annotations
 from datetime import datetime
 from pathlib import Path
 
+from rich.table import Table
+from rich.text import Text
+
 from bouquet.models import WorktreeInfo, WorktreeStatus
 from bouquet.tui.app import OrchestratorApp, _extract_response
 from bouquet.tui.screens import NewWorktreeScreen, SendPromptScreen
-from bouquet.tui.widgets import ProjectHeader, WorktreeDetailPanel, WorktreeTable
+from bouquet.tui.widgets import _STATUS_LABEL, _STATUS_STYLE, ProjectHeader, WorktreeDetailPanel, WorktreeTable
 
 
 def test_tui_modules_importable() -> None:
@@ -132,8 +135,6 @@ def test_detail_panel_pr_pending() -> None:
 
 def test_detail_panel_render_placeholder() -> None:
     """render() returns dim Text placeholder when no worktree selected."""
-    from rich.text import Text
-
     panel = WorktreeDetailPanel()
     result = panel.render()
     assert isinstance(result, Text)
@@ -142,8 +143,6 @@ def test_detail_panel_render_placeholder() -> None:
 
 def test_detail_panel_render_table() -> None:
     """render() returns a Rich Table when a worktree is shown."""
-    from rich.table import Table
-
     panel = WorktreeDetailPanel()
     wt = WorktreeInfo(
         branch="feature/x",
@@ -173,8 +172,6 @@ def test_detail_panel_set_pr_url_other_branch() -> None:
 
 def test_detail_panel_all_statuses_have_style() -> None:
     """Every WorktreeStatus has an entry in both _STATUS_LABEL and _STATUS_STYLE."""
-    from bouquet.tui.widgets import _STATUS_LABEL, _STATUS_STYLE
-
     for status in WorktreeStatus:
         assert status in _STATUS_LABEL, f"{status} missing from _STATUS_LABEL"
         assert status in _STATUS_STYLE, f"{status} missing from _STATUS_STYLE"

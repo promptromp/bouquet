@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import subprocess
+from pathlib import Path
 from unittest.mock import patch
 
 import pytest
@@ -51,9 +52,11 @@ def test_lookup_pr_url_returns_none_on_no_pr() -> None:
 
 
 def test_lookup_pr_url_raises_when_gh_missing() -> None:
-    with patch("bouquet.github.gh_available", return_value=False):
-        with pytest.raises(GitHubError, match="gh CLI is not installed"):
-            lookup_pr_url("feature/auth")
+    with (
+        patch("bouquet.github.gh_available", return_value=False),
+        pytest.raises(GitHubError, match="gh CLI is not installed"),
+    ):
+        lookup_pr_url("feature/auth")
 
 
 def test_lookup_pr_url_passes_cwd() -> None:
@@ -62,8 +65,6 @@ def test_lookup_pr_url_passes_cwd() -> None:
         patch("bouquet.github.subprocess.run") as mock_run,
     ):
         mock_run.return_value = subprocess.CompletedProcess(args=[], returncode=0, stdout="url\n", stderr="")
-        from pathlib import Path
-
         lookup_pr_url("branch", cwd=Path("/my/repo"))
         assert mock_run.call_args[1]["cwd"] == Path("/my/repo")
 
