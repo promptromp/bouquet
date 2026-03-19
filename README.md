@@ -1,109 +1,169 @@
 # bouquet
 
-An orchestration layer for agentic coding.
+--------------------------------------------------------------------------------
 
-Uses best-of-breed approach to support multiplexing agentic coding tasks:
+[![CI](https://github.com/promptromp/bouquet/actions/workflows/ci.yml/badge.svg)](https://github.com/promptromp/bouquet/actions/workflows/ci.yml)
 
-* Use [git worktrees]() for supporting concurrent development on multiple features touching same repository
-* Uses [direnv]() for managing configuration via environment variables of services
-* Uses [tmux]() and [tmuxinator]() for supporting remote control and intuitive development workflow where coding agents need to use dev servers (e.g. running daemons/API services) locally and have easy access to their input and output (E.g. via tmux send-keys and pane capture)
-* Uses OS and Language-specific mechanisms for speed and efficiency (`uv` for Python, `pnpm` for JavaScript, Copy-on-write for APFS/macOS etc.)
-* Supports a configuration file-based usage for easy scaffolding per project (using TOML configuration file format).
+> **Warning — Alpha Software**
+> Bouquet is under active development. APIs, config format, and CLI behavior may change without notice. Use at your own risk.
 
+An orchestration layer for **multi-agent coding** — multiplexing coding agents across git worktrees with isolated services, all in one tmux session.
+
+```bash
+cd my-project
+bouquet start              # TUI launches, create worktrees, agents spin up
+```
+
+### Key Features
+
+| | Feature | Details |
+|---|---|---|
+| 🌿 | **Git worktree isolation** | Each feature branch gets its own worktree, venv, and node_modules — no cross-contamination |
+| 🖥️ | **Multi-pane services** | Run API servers, workers, frontends alongside the agent with automatic port offsetting per worktree |
+| 🤖 | **Agent orchestration** | TUI in tmux window 0 to create, switch, and manage worktree-backed agent windows |
+| ⚡ | **Fast bootstrap** | CoW-clones `.venv`/`node_modules` (APFS), copies `.env` files, runs `uv sync`/`pnpm install` |
+| 🔧 | **Zero-arg CLI** | Just `cd` into your repo and run `bouquet start` — project name inferred from `.bouquet.toml` |
+
+---
+
+## Requirements
+
+- Python 3.14+
+- [tmux](https://github.com/tmux/tmux) (`brew install tmux`)
+- [direnv](https://direnv.net/) (optional, `brew install direnv`)
+- Language package managers as needed (`uv`, `pnpm`)
 
 ## Installation
 
-Make sure you have the needed OS packages installed, minimally:
-
-* tmux (on macOS `brew install tmux`)
-* direnv (on macOS `brew install direnv`) — optional, for env var management
-* relevant languages package managers (e.g. `uv`, `pnpm`)
-
-Then install bouquet:
-
 ```bash
-# From the repo root
-uv sync
+# Run without installing
+uvx bouquet --help
 
 # Or install via pip
-pip install -e .
+pip install bouquet
+
+# Or from source (development)
+git clone https://github.com/promptromp/bouquet.git
+cd bouquet
+uv sync
 ```
 
+---
 
-## Usage
+## Quick Start
 
-### Initialize a project
-
-Generate a `.bouquet.toml` configuration file in your repo:
+### 1. Initialize
 
 ```bash
-bouquet init --repo /path/to/your/repo
+cd /path/to/your/repo
+bouquet init
 ```
 
-This creates a `.bouquet.toml` template. Edit it to configure your project name, languages, agent command, bootstrap settings, and tmux preferences.
+Creates a `.bouquet.toml` template. Edit it to configure your project.
 
-### Start a session
+### 2. Start a session
 
 ```bash
-bouquet start my-project --repo /path/to/your/repo
+bouquet start
 ```
 
 This will:
-1. Create a tmux session named `bouquet-my-project`
+1. Create a tmux session (`bouquet-<project-name>`)
 2. Launch the orchestrator TUI in window 0
-3. Attach you to the session
+3. Adopt any existing git worktrees
+4. Attach you to the session
 
-You can also point to a specific config file:
+You can also pass arguments explicitly:
 
 ```bash
 bouquet start my-project --repo /path/to/repo --config /path/to/.bouquet.toml
 ```
 
-### Using the TUI
+### 3. Use the TUI
 
-Once inside the tmux session, the orchestrator TUI in window 0 provides:
+| Key | Action |
+|---|---|
+| `N` | Create a new worktree (opens branch dialog) |
+| `S` / `Enter` | Switch to the selected worktree's window |
+| `D` | Delete the selected worktree and its window |
+| `R` | Refresh the worktree list |
+| `Q` | Quit (with confirmation — kills the session) |
 
-| Key       | Action                                      |
-|-----------|---------------------------------------------|
-| `N`       | Create a new worktree (opens branch dialog) |
-| `Enter`   | Switch to the selected worktree's window    |
-| `D`       | Delete the selected worktree and its window |
-| `R`       | Refresh the worktree list                   |
-| `Q`       | Quit the TUI                                |
-
-When you create a new worktree, bouquet will:
+When you create a worktree, bouquet will:
 - Create a git worktree with a new branch
 - Bootstrap the environment (copy `.env` files, CoW-clone `.venv`/`node_modules`)
-- Open a new tmux window in the worktree directory
-- Auto-launch the configured agent command (e.g. `claude`)
+- Open a new tmux window with service panes (if configured)
+- Launch the agent (e.g. `claude`) in pane 0
 
-Switch back to the orchestrator at any time with `Ctrl-b 0` (tmux default).
+Switch back to the orchestrator: `Ctrl-b 0`.
 
-### Stop a session
+### 4. Stop
 
 ```bash
-bouquet stop my-project
+bouquet stop
 ```
 
-This cleans up all managed git worktrees, kills the tmux session, and removes the session state file.
+Cleans up all managed worktrees, kills the tmux session, and removes state.
 
+---
 
-## Overview
+## Services
 
-`bouquet` strings together a few frameworks and technologies to support an intuitive and powerful workflow for multi-agent development orchestration.
+Run dev servers alongside the agent in each worktree window. Define them in `.bouquet.toml`:
 
-A single logical `project` (typically corresponding to a single code repository, e.g. Git repo) is associated with a `configuration` (via TOML file) that lets user specify a few relevant parameters (project languages, dev servers, e.g. CLI invocation for one or more services such as API service, daemon, etc. which we'd want to run locally for development).
-`bouquet` then exposes a CLI that lets users bootstrap a `session` - a tmux session configured tmuxinator config language, with a layout consisting of the dev servers as configured and an agentic coding tool (e.g. Claude Code). multiple windows would be created in the session, each corresponding to a logical git worktree / feature branch to allow for easy work on multiple features at once, while still easily switching between them within context of a single tmux session.
-Additionally, the first window fo the tmux session consists of an orchestration agent - a TUI that shows high-level summary of activity across all worktrees / windows for the current project, as well as allowing to dispatch commands / tasks and spawn new windows in the session corresponding to new features/worktrees.
+```toml
+[[services]]
+name = "api"
+command = "uv run uvicorn app.main:app --reload --port {{ 8000 + BOUQUET_WORKTREE_INDEX }}"
 
+[[services]]
+name = "frontend"
+command = "npm run dev -- --port {{ 3000 + BOUQUET_WORKTREE_INDEX }}"
 
+[tmux]
+layout = "main-vertical"
+```
+
+Each worktree gets a unique index (1, 2, 3, ...) so services bind to different ports automatically.
+
+### Template Variables
+
+| Variable | Type | Example |
+|---|---|---|
+| `BOUQUET_WORKTREE_INDEX` | int | `1`, `2`, `3` |
+| `BOUQUET_WORKTREE_BRANCH` | str | `feature/auth` |
+| `BOUQUET_WORKTREE_PATH` | str | `/path/to/.bouquet-worktrees/feature-auth` |
+| `BOUQUET_PROJECT_NAME` | str | `my-project` |
+
+Arithmetic supported: `{{ 8000 + BOUQUET_WORKTREE_INDEX }}` → `8001`.
+
+No services defined = single pane with just the agent (backward compatible).
+
+### Pane Layout
+
+With `layout = "main-vertical"` and two services:
+
+```
+┌──────────────────┬────────────┐
+│                  │   api      │
+│   agent (claude) ├────────────┤
+│                  │  frontend  │
+└──────────────────┴────────────┘
+```
+
+---
+
+## Architecture
+
+```
 The Conceptual Stack
 ┌─────────────────────────────────────────┐
-│         Orchestration Layer             │  ← coordinates agents, tasks, merges
+│         Orchestration Layer             │  ← TUI, agent coordination
 ├─────────────────────────────────────────┤
-│         Session / Mux Layer             │  ← tmux, process management
+│         Session / Mux Layer             │  ← tmux sessions, windows, panes
 ├─────────────────────────────────────────┤
 │         Isolation Layer                 │  ← git worktrees + env isolation
 ├─────────────────────────────────────────┤
 │         Environment Layer               │  ← venv/node_modules/env vars
 └─────────────────────────────────────────┘
+```
