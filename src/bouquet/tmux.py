@@ -151,9 +151,26 @@ class TmuxManager:
         session.set_environment(key, value)
 
     def capture_pane(self, session_name: str, window_id: str) -> str:
-        """Capture the content of pane 0 in the given window (by window ID)."""
+        """Capture the content of the active pane in the given window (by window ID)."""
         window = self._get_window_by_id(session_name, window_id)
         pane = window.active_pane
+        if pane is None:
+            return ""
+        lines = pane.capture_pane()
+        return "\n".join(lines)
+
+    # --- Pane-ID-based operations (preferred for targeting agent pane) ---
+
+    def send_keys_to_pane(self, pane_id: str, keys: str, enter: bool = True) -> None:
+        """Send keystrokes directly to a pane by its unique pane ID (e.g. ``%42``)."""
+        pane = self.server.panes.get(pane_id=pane_id)
+        if pane is None:
+            raise TmuxError(f"Pane '{pane_id}' not found")
+        pane.send_keys(keys, enter=enter)
+
+    def capture_pane_by_id(self, pane_id: str) -> str:
+        """Capture content from a specific pane by its unique pane ID."""
+        pane = self.server.panes.get(pane_id=pane_id)
         if pane is None:
             return ""
         lines = pane.capture_pane()

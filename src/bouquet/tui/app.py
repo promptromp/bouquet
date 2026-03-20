@@ -56,6 +56,7 @@ class OrchestratorApp(App):
         Binding("n", "new_worktree", "New worktree"),
         Binding("s", "switch_worktree", "Switch to window"),
         Binding("d", "delete_worktree", "Delete worktree"),
+        Binding("a", "toggle_auto_accept", "Auto-accept"),
         Binding("p", "send_prompt", "Send prompt"),
         Binding("t", "status", "Status"),
         Binding("r", "refresh", "Refresh"),
@@ -75,6 +76,7 @@ class OrchestratorApp(App):
         self._activity_monitor = ActivityMonitor(manager.tmux)
         self._polling = False
         self._send_to_all = False
+        self._recently_accepted: set[str] = set()
 
     def compose(self) -> ComposeResult:
         yield ProjectHeader(self.settings.project.name)
@@ -131,10 +133,31 @@ class OrchestratorApp(App):
             changed = False
             for wt in self.session_state.worktrees:
                 if wt.tmux_window_id and wt.status in POLLABLE_STATUSES:
-                    new_status = self._activity_monitor.check(self.session_state.tmux_session_name, wt.tmux_window_id)
+                    new_status = self._activity_monitor.check(
+                        self.session_state.tmux_session_name, wt.tmux_window_id, wt.agent_pane_id
+                    )
                     if new_status != wt.status:
                         wt.status = new_status
                         changed = True
+                    # Auto-accept: send "y" when WAITING and auto_accept is on
+                    guard_key = wt.agent_pane_id or wt.tmux_window_id
+                    if (
+                        new_status == WorktreeStatus.WAITING
+                        and wt.auto_accept
+                        and guard_key not in self._recently_accepted
+                    ):
+                        try:
+                            if wt.agent_pane_id:
+                                self.manager.tmux.send_keys_to_pane(wt.agent_pane_id, "y")
+                            else:
+                                self.manager.tmux.send_keys_to_window_id(
+                                    self.session_state.tmux_session_name, wt.tmux_window_id, "y"
+                                )
+                            self._recently_accepted.add(guard_key)
+                        except Exception:
+                            pass
+                    elif new_status != WorktreeStatus.WAITING and guard_key in self._recently_accepted:
+                        self._recently_accepted.discard(guard_key)
             if changed:
                 self.call_from_thread(self._refresh_table)
         finally:
@@ -147,14 +170,15 @@ class OrchestratorApp(App):
         base = self.settings.project.base_branch
         profile_names = [p.name for p in self.settings.agent.profiles]
 
-        def on_result(result: tuple[str, str, str | None] | None) -> None:
+        def on_result(result: tuple[str, str, str | None, bool] | None) -> None:
             if result is not None:
-                branch, base_branch, profile = result
+                branch, base_branch, profile, auto_accept = result
                 # Add a CREATING placeholder immediately so the user sees feedback
                 placeholder = WorktreeInfo(
                     branch=branch,
                     path=Path("."),
                     status=WorktreeStatus.CREATING,
+                    auto_accept=auto_accept,
                 )
                 self.session_state.worktrees.append(placeholder)
                 self._refresh_table()
@@ -222,6 +246,25 @@ class OrchestratorApp(App):
         except Exception as e:
             self.notify(f"Error switching: {e}", severity="error")
 
+    def action_toggle_auto_accept(self) -> None:
+        """Toggle auto-accept for the currently highlighted worktree."""
+        table = self.query_one(WorktreeTable)
+        if table.cursor_row is None or table.row_count == 0:
+            return
+        row_data = table.get_row_at(table.cursor_row)
+        branch = str(row_data[1])  # Column 1 is Branch
+        wt = next((w for w in self.session_state.worktrees if w.branch == branch), None)
+        if wt is None:
+            return
+        wt.auto_accept = not wt.auto_accept
+        guard_key = wt.agent_pane_id or wt.tmux_window_id
+        if not wt.auto_accept and guard_key:
+            self._recently_accepted.discard(guard_key)
+        self.session_state.save()
+        self._refresh_table()
+        state = "on" if wt.auto_accept else "off"
+        self.notify(f"Auto-accept {state} for {branch}")
+
     def action_delete_worktree(self) -> None:
         """Delete the selected worktree."""
         table = self.query_one(WorktreeTable)
@@ -242,6 +285,8 @@ class OrchestratorApp(App):
         info = next((w for w in self.session_state.worktrees if w.branch == branch), None)
         if info and info.tmux_window_id:
             self._activity_monitor.remove(info.tmux_window_id)
+            guard_key = info.agent_pane_id or info.tmux_window_id
+            self._recently_accepted.discard(guard_key)
         try:
             self.manager.remove(branch)
             self.call_from_thread(self._refresh_table)
@@ -280,7 +325,10 @@ class OrchestratorApp(App):
         sent: list[WorktreeInfo] = []
         for wt in targets:
             try:
-                self.manager.tmux.send_keys_to_window_id(session, wt.tmux_window_id, prompt)  # type: ignore[arg-type]
+                if wt.agent_pane_id:
+                    self.manager.tmux.send_keys_to_pane(wt.agent_pane_id, prompt)
+                else:
+                    self.manager.tmux.send_keys_to_window_id(session, wt.tmux_window_id, prompt)  # type: ignore[arg-type]
                 sent.append(wt)
             except Exception:
                 pass
@@ -302,7 +350,10 @@ class OrchestratorApp(App):
             all_stable = True
             for wt in sent:
                 try:
-                    content = self.manager.tmux.capture_pane(session, wt.tmux_window_id)  # type: ignore[arg-type]
+                    if wt.agent_pane_id:
+                        content = self.manager.tmux.capture_pane_by_id(wt.agent_pane_id)
+                    else:
+                        content = self.manager.tmux.capture_pane(session, wt.tmux_window_id)  # type: ignore[arg-type]
                 except Exception:
                     continue
                 h = hashlib.sha256(content.encode()).hexdigest()
@@ -326,7 +377,10 @@ class OrchestratorApp(App):
         responses: list[AgentResponse] = []
         for wt in sent:
             try:
-                content = self.manager.tmux.capture_pane(session, wt.tmux_window_id)  # type: ignore[arg-type]
+                if wt.agent_pane_id:
+                    content = self.manager.tmux.capture_pane_by_id(wt.agent_pane_id)
+                else:
+                    content = self.manager.tmux.capture_pane(session, wt.tmux_window_id)  # type: ignore[arg-type]
             except Exception:
                 content = ""
             response_text = _extract_response(content, prompt)
@@ -384,11 +438,14 @@ class OrchestratorApp(App):
         errors = 0
         for wt in targets:
             try:
-                self.manager.tmux.send_keys_to_window_id(
-                    self.session_state.tmux_session_name,
-                    wt.tmux_window_id,  # type: ignore[arg-type]
-                    prompt,
-                )
+                if wt.agent_pane_id:
+                    self.manager.tmux.send_keys_to_pane(wt.agent_pane_id, prompt)
+                else:
+                    self.manager.tmux.send_keys_to_window_id(
+                        self.session_state.tmux_session_name,
+                        wt.tmux_window_id,  # type: ignore[arg-type]
+                        prompt,
+                    )
             except Exception as e:
                 self.notify(f"Error sending to {wt.branch}: {e}", severity="error")
                 errors += 1
