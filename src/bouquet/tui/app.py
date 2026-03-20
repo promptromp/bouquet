@@ -86,6 +86,7 @@ class OrchestratorApp(App):
         Binding("t", "status", "Status"),
         Binding("c", "create_task", "Create task"),
         Binding("x", "pick_up_task", "Pick up task"),
+        Binding("m", "complete_task", "Complete task"),
         Binding("backspace", "delete_task", "Delete task"),
         Binding("r", "refresh", "Refresh"),
         Binding("q", "quit", "Quit"),
@@ -632,6 +633,32 @@ class OrchestratorApp(App):
             self.call_from_thread(self._refresh_table)
             self.call_from_thread(self._refresh_tasks)
             self.call_from_thread(self.notify, f"Error picking up task: {e}", severity="error")
+
+    def action_complete_task(self) -> None:
+        """Mark the highlighted task as done."""
+        task_table = self.query_one(TaskQueueTable)
+        if task_table.cursor_row is None or task_table.row_count == 0:
+            self.notify("No task selected", severity="warning")
+            return
+        row_key = task_table.coordinate_to_cell_key(Coordinate(task_table.cursor_row, 0)).row_key
+        task_id = str(row_key.value)
+        self._complete_task_worker(task_id)
+
+    @work(thread=True)
+    def _complete_task_worker(self, task_id: str) -> None:
+        try:
+            task = self.task_backend.get_task(task_id)
+            if task is None:
+                self.call_from_thread(self.notify, f"Task {task_id} not found", severity="error")
+                return
+            if task.status == TaskStatus.DONE:
+                self.call_from_thread(self.notify, "Task is already done", severity="warning")
+                return
+            self.task_backend.update_status(task_id, TaskStatus.DONE)
+            self.call_from_thread(self._refresh_tasks)
+            self.call_from_thread(self.notify, f"Task '{task.title}' completed")
+        except Exception as e:
+            self.call_from_thread(self.notify, f"Error completing task: {e}", severity="error")
 
     def action_delete_task(self) -> None:
         """Delete the highlighted task from the task queue."""

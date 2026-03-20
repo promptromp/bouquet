@@ -151,7 +151,7 @@ class WorktreeDetailPanel(Static):
 _TASK_STATUS_DISPLAY: dict[TaskStatus, Text] = {
     TaskStatus.OPEN: Text("○ open", style="cyan"),
     TaskStatus.IN_PROGRESS: Text("● in progress", style="green"),
-    TaskStatus.DONE: Text("✓ done", style="dim"),
+    TaskStatus.DONE: Text("✓ done", style="dim green"),
 }
 
 
