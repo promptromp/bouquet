@@ -286,6 +286,66 @@ class CreateTaskScreen(ModalScreen[tuple[str, str] | None]):
             self.query_one("#task-create-btn", Button).press()
 
 
+class CompleteTaskScreen(ModalScreen[bool | None]):
+    """Confirmation dialog when completing a task — optionally remove the worktree."""
+
+    CSS = """
+    CompleteTaskScreen {
+        align: center middle;
+    }
+
+    #complete-task-dialog {
+        width: 64;
+        height: auto;
+        padding: 1 2;
+        border: thick $accent;
+        background: $surface;
+    }
+
+    #complete-task-dialog Label {
+        margin-bottom: 1;
+    }
+
+    .button-row {
+        layout: horizontal;
+        height: auto;
+        margin-top: 1;
+    }
+
+    .button-row Button {
+        margin-right: 1;
+    }
+    """
+
+    def __init__(self, task_title: str, branch: str | None = None) -> None:
+        super().__init__()
+        self._task_title = task_title
+        self._branch = branch
+
+    def compose(self) -> ComposeResult:
+        with Vertical(id="complete-task-dialog"):
+            yield Label(f"Complete task: [bold]{self._task_title}[/bold]")
+            if self._branch:
+                yield Label(f"Worktree: [cyan]{self._branch}[/cyan]")
+                yield Label("Also remove the associated worktree?")
+                with Vertical(classes="button-row"):
+                    yield Button("Complete + Remove worktree", variant="primary", id="complete-remove-btn")
+                    yield Button("Complete only", variant="default", id="complete-only-btn")
+                    yield Button("Cancel", variant="default", id="cancel-btn")
+            else:
+                with Vertical(classes="button-row"):
+                    yield Button("Complete", variant="primary", id="complete-only-btn")
+                    yield Button("Cancel", variant="default", id="cancel-btn")
+
+    def on_button_pressed(self, event: Button.Pressed) -> None:
+        if event.button.id == "complete-remove-btn":
+            self.dismiss(True)  # complete + remove worktree
+        elif event.button.id == "complete-only-btn":
+            self.dismiss(False)  # complete only
+        else:
+            self.dismiss(None)  # cancel
+
+
 class SendPromptScreen(ModalScreen[tuple[str, bool] | None]):
     """Send a prompt directly to running agent(s) via tmux send-keys."""
 

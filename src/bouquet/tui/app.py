@@ -27,6 +27,7 @@ from bouquet.tasks.base import TaskStatus
 from bouquet.tmux import TmuxManager
 from bouquet.tui.screens import (
     BroadcastResultsScreen,
+    CompleteTaskScreen,
     ConfirmQuitScreen,
     CreateTaskScreen,
     NewWorktreeScreen,
@@ -635,28 +636,56 @@ class OrchestratorApp(App):
             self.call_from_thread(self.notify, f"Error picking up task: {e}", severity="error")
 
     def action_complete_task(self) -> None:
-        """Mark the highlighted task as done."""
+        """Mark the highlighted task as done, optionally removing the worktree."""
         task_table = self.query_one(TaskQueueTable)
         if task_table.cursor_row is None or task_table.row_count == 0:
             self.notify("No task selected", severity="warning")
             return
         row_key = task_table.coordinate_to_cell_key(Coordinate(task_table.cursor_row, 0)).row_key
         task_id = str(row_key.value)
-        self._complete_task_worker(task_id)
+        task = self.task_backend.get_task(task_id)
+        if task is None:
+            self.notify(f"Task {task_id} not found", severity="error")
+            return
+        if task.status == TaskStatus.DONE:
+            self.notify("Task is already done", severity="warning")
+            return
+
+        # Find associated worktree
+        wt = next((w for w in self.session_state.worktrees if w.task_id == task_id), None)
+        branch = wt.branch if wt else None
+
+        def on_result(result: bool | None) -> None:
+            if result is not None:
+                self._complete_task_worker(task_id, remove_worktree=result, branch=branch)
+
+        self.push_screen(CompleteTaskScreen(task.title, branch), callback=on_result)
 
     @work(thread=True)
-    def _complete_task_worker(self, task_id: str) -> None:
+    def _complete_task_worker(self, task_id: str, *, remove_worktree: bool, branch: str | None) -> None:
         try:
             task = self.task_backend.get_task(task_id)
             if task is None:
                 self.call_from_thread(self.notify, f"Task {task_id} not found", severity="error")
                 return
-            if task.status == TaskStatus.DONE:
-                self.call_from_thread(self.notify, "Task is already done", severity="warning")
-                return
             self.task_backend.update_status(task_id, TaskStatus.DONE)
             self.call_from_thread(self._refresh_tasks)
-            self.call_from_thread(self.notify, f"Task '{task.title}' completed")
+
+            if remove_worktree and branch:
+                # Clean up activity monitor state
+                info = next((w for w in self.session_state.worktrees if w.branch == branch), None)
+                if info and info.tmux_window_id:
+                    self._activity_monitor.remove(info.tmux_window_id)
+                    guard_key = info.agent_pane_id or info.tmux_window_id
+                    self._recently_accepted.discard(guard_key)
+                if info:
+                    info.status = WorktreeStatus.REMOVING
+                    self.call_from_thread(self._refresh_table)
+                self.manager.remove(branch)
+                self.call_from_thread(self._refresh_table)
+                self.call_from_thread(self.notify, f"Task '{task.title}' completed, worktree removed")
+            else:
+                self.call_from_thread(self.notify, f"Task '{task.title}' completed")
         except Exception as e:
             self.call_from_thread(self.notify, f"Error completing task: {e}", severity="error")
 
