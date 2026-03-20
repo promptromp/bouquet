@@ -377,6 +377,58 @@ def test_create_without_agent_profile(manager: WorktreeManager) -> None:
     assert info.agent_profile is None
 
 
+def test_agent_args_sent_to_tmux(manager: WorktreeManager) -> None:
+    """Agent args from config should be included in the command sent to tmux."""
+    manager.settings.agent.args = ["--dangerously-skip-permissions", "--chrome"]
+    manager.create("feature/args-test")
+
+    mock_tmux = manager.tmux
+    assert isinstance(mock_tmux, MagicMock)
+    sent_cmd = mock_tmux.send_keys_to_pane.call_args[0][1]
+    assert "--dangerously-skip-permissions" in sent_cmd
+    assert "--chrome" in sent_cmd
+
+
+def test_agent_profile_args_sent_to_tmux(
+    sample_settings: BouquetSettings,
+    tmp_git_repo: Path,
+    tmp_path: Path,
+    mock_tmux: MagicMock,
+    monkeypatch: object,
+) -> None:
+    """Named profile args should be sent to tmux instead of top-level args."""
+    from bouquet.config import AgentProfile
+
+    state_dir = tmp_path / "state"
+    state_dir.mkdir()
+    monkeypatch.setattr(  # type: ignore[attr-defined]
+        models_mod.SessionState,
+        "state_dir",
+        classmethod(lambda cls: state_dir),
+    )
+
+    sample_settings.agent.profiles = [
+        AgentProfile(name="auto", command="claude", args=["--dangerously-skip-permissions", "--chrome"]),
+    ]
+    sample_settings.bootstrap.python_deps_command = ""
+    sample_settings.bootstrap.node_deps_command = ""
+    sample_settings.bootstrap.copy_env_files = []
+    sample_settings.bootstrap.use_cow_clone = False
+
+    state = SessionState(
+        project_name="test-project",
+        tmux_session_name="bouquet-test-project",
+        repo_path=tmp_git_repo,
+    )
+    state.save()
+
+    mgr = WorktreeManager(sample_settings, state, mock_tmux)
+    mgr.create("feature/profile-args", agent_profile="auto")
+
+    sent_cmd = mock_tmux.send_keys_to_pane.call_args[0][1]
+    assert sent_cmd == "claude --dangerously-skip-permissions --chrome"
+
+
 # --- Window-ID-based operations ---
 
 
