@@ -14,6 +14,7 @@ from textual import work
 from textual.app import App, ComposeResult
 from textual.binding import Binding
 from textual.containers import Horizontal, Vertical
+from textual.coordinate import Coordinate
 from textual.widgets import Footer, Static
 
 from bouquet.activity import POLLABLE_STATUSES, ActivityMonitor
@@ -21,14 +22,17 @@ from bouquet.agents.base import AgentResponse
 from bouquet.config import BouquetSettings, load_config
 from bouquet.github import GitHubError, lookup_pr_url
 from bouquet.models import SessionState, WorktreeInfo, WorktreeStatus
+from bouquet.tasks import TaskQueueBackend, create_backend
+from bouquet.tasks.base import TaskStatus
 from bouquet.tmux import TmuxManager
 from bouquet.tui.screens import (
     BroadcastResultsScreen,
     ConfirmQuitScreen,
+    CreateTaskScreen,
     NewWorktreeScreen,
     SendPromptScreen,
 )
-from bouquet.tui.widgets import DetailTabs, ProjectHeader, WorktreeDetailPanel, WorktreeTable
+from bouquet.tui.widgets import ProjectHeader, TaskQueueTable, WorktreeDetailPanel, WorktreeTable
 from bouquet.worktree import WorktreeManager
 
 
@@ -80,6 +84,9 @@ class OrchestratorApp(App):
         Binding("a", "toggle_auto_accept", "Auto-accept"),
         Binding("p", "send_prompt", "Send prompt"),
         Binding("t", "status", "Status"),
+        Binding("c", "create_task", "Create task"),
+        Binding("x", "pick_up_task", "Pick up task"),
+        Binding("backspace", "delete_task", "Delete task"),
         Binding("r", "refresh", "Refresh"),
         Binding("q", "quit", "Quit"),
     ]
@@ -89,11 +96,13 @@ class OrchestratorApp(App):
         settings: BouquetSettings,
         state: SessionState,
         manager: WorktreeManager,
+        task_backend: TaskQueueBackend | None = None,
     ) -> None:
         super().__init__()
         self.settings = settings
         self.session_state = state
         self.manager = manager
+        self.task_backend = task_backend or create_backend(settings.task_queue, settings.project.name)
         self._activity_monitor = ActivityMonitor(manager.tmux)
         self._polling = False
         self._send_to_all = False
@@ -109,17 +118,17 @@ class OrchestratorApp(App):
                     "No worktrees yet. Press [bold]n[/bold] to create one.",
                     id="empty-state",
                 )
-            with Vertical(id="right-panel"):
-                with Vertical(id="detail-container"):
-                    yield WorktreeDetailPanel()
                 with Vertical(id="tasks-container"):
-                    yield DetailTabs()
+                    yield TaskQueueTable()
+            with Vertical(id="right-panel"), Vertical(id="detail-container"):
+                yield WorktreeDetailPanel()
         yield Footer()
 
     def on_mount(self) -> None:
         self.query_one("#detail-container").border_title = "Details"
-        self.query_one("#tasks-container").border_title = "Tasks"
+        self.query_one("#tasks-container").border_title = "Task Queue"
         self._refresh_table()
+        self._reconcile_tasks()
         self.set_interval(2.0, self._poll_activity)
 
     def _refresh_table(self) -> None:
@@ -257,6 +266,8 @@ class OrchestratorApp(App):
 
     def on_data_table_row_highlighted(self, event: WorktreeTable.RowHighlighted) -> None:
         """Update the detail panel when the cursor moves to a new row."""
+        if not isinstance(event.data_table, WorktreeTable):
+            return
         if event.row_key is None:
             return
         row_data = event.data_table.get_row(event.row_key)
@@ -280,6 +291,8 @@ class OrchestratorApp(App):
 
     def on_data_table_row_selected(self, event: WorktreeTable.RowSelected) -> None:
         """Handle Enter on a table row — switch to that worktree's tmux window."""
+        if not isinstance(event.data_table, WorktreeTable):
+            return
         row_data = event.data_table.get_row(event.row_key)
         branch = str(row_data[1])  # Column 1 is Branch
         self._switch_to_branch(branch)
@@ -507,6 +520,142 @@ class OrchestratorApp(App):
         if sent > 0:
             self.notify(f"Sent prompt to {sent} agent(s)")
 
+    # --- Task queue ---
+
+    @work(thread=True, group="task-refresh")
+    def _reconcile_tasks(self) -> None:
+        """Reconcile task state on startup: restore task_id links and reset stale tasks."""
+        # 1. Restore task_id on adopted worktrees matching IN_PROGRESS tasks
+        in_progress = self.task_backend.list_tasks(status=TaskStatus.IN_PROGRESS)
+        task_by_branch = {t.branch: t for t in in_progress if t.branch}
+        restored = False
+        for wt in self.session_state.worktrees:
+            if wt.task_id is None and wt.branch in task_by_branch:
+                wt.task_id = task_by_branch[wt.branch].id
+                restored = True
+        if restored:
+            self.session_state.save()
+
+        # 2. Reset stale IN_PROGRESS tasks (no matching worktree)
+        active_branches = {wt.branch for wt in self.session_state.worktrees}
+        reset = self.task_backend.reconcile_stale(active_branches)
+        if reset:
+            self.call_from_thread(self.notify, f"Reset {len(reset)} stale task(s) to open")
+
+        # 3. Refresh task table
+        tasks = self.task_backend.list_tasks()
+        task_table = self.query_one(TaskQueueTable)
+        self.call_from_thread(task_table.refresh_tasks, tasks)
+
+    def _refresh_tasks(self) -> None:
+        """Refresh the task queue table from the backend."""
+        self._refresh_tasks_worker()
+
+    @work(thread=True, group="task-refresh")
+    def _refresh_tasks_worker(self) -> None:
+        tasks = self.task_backend.list_tasks()
+        task_table = self.query_one(TaskQueueTable)
+        self.call_from_thread(task_table.refresh_tasks, tasks)
+
+    def action_create_task(self) -> None:
+        """Open the create task dialog."""
+
+        def on_result(result: tuple[str, str] | None) -> None:
+            if result is not None:
+                title, description = result
+                self._create_task_worker(title, description)
+
+        self.push_screen(CreateTaskScreen(), callback=on_result)
+
+    @work(thread=True)
+    def _create_task_worker(self, title: str, description: str) -> None:
+        try:
+            self.task_backend.create_task(title, description)
+            self.call_from_thread(self._refresh_tasks)
+            self.call_from_thread(self.notify, f"Task '{title}' created")
+        except Exception as e:
+            self.call_from_thread(self.notify, f"Error creating task: {e}", severity="error")
+
+    def action_pick_up_task(self) -> None:
+        """Pick up the highlighted task in the task queue table."""
+        task_table = self.query_one(TaskQueueTable)
+        if task_table.cursor_row is None or task_table.row_count == 0:
+            self.notify("No task selected", severity="warning")
+            return
+        row_key = task_table.coordinate_to_cell_key(Coordinate(task_table.cursor_row, 0)).row_key
+        task_id = str(row_key.value)
+        task = self.task_backend.get_task(task_id)
+        if task is None:
+            self.notify(f"Task {task_id} not found", severity="error")
+            return
+        if task.status != TaskStatus.OPEN:
+            self.notify(f"Task is already {task.status.value}", severity="warning")
+            return
+        # Compute branch name to add a CREATING placeholder immediately
+        sanitized = re.sub(r"[^a-z0-9]+", "-", task.title.lower())[:40].strip("-")
+        branch = f"{self.settings.task_queue.auto_branch_prefix}{task.id}-{sanitized}"
+        placeholder = WorktreeInfo(
+            branch=branch,
+            path=Path("."),
+            status=WorktreeStatus.CREATING,
+            task_id=task_id,
+        )
+        self.session_state.worktrees.append(placeholder)
+        self._refresh_table()
+        self._refresh_tasks()
+        self.notify(f"Picking up task: {task.title}")
+        self._pick_up_task_worker(task_id, branch)
+
+    @work(thread=True)
+    def _pick_up_task_worker(self, task_id: str, branch: str) -> None:
+        try:
+            task = self.task_backend.get_task(task_id)
+            if task is None:
+                self.session_state.worktrees = [w for w in self.session_state.worktrees if w.branch != branch]
+                self.call_from_thread(self._refresh_table)
+                self.call_from_thread(self.notify, f"Task {task_id} not found", severity="error")
+                return
+            profile_names = [p.name for p in self.settings.agent.profiles]
+            agent_profile = profile_names[0] if profile_names else None
+            self.manager.pick_up_task(
+                task=task,
+                backend=self.task_backend,
+                auto_branch_prefix=self.settings.task_queue.auto_branch_prefix,
+                agent_profile=agent_profile,
+            )
+            self.call_from_thread(self._refresh_table)
+            self.call_from_thread(self._refresh_tasks)
+            self.call_from_thread(self.notify, f"Picked up task: {task.title}")
+        except Exception as e:
+            # Remove the placeholder on error
+            self.session_state.worktrees = [w for w in self.session_state.worktrees if w.branch != branch]
+            self.call_from_thread(self._refresh_table)
+            self.call_from_thread(self._refresh_tasks)
+            self.call_from_thread(self.notify, f"Error picking up task: {e}", severity="error")
+
+    def action_delete_task(self) -> None:
+        """Delete the highlighted task from the task queue."""
+        task_table = self.query_one(TaskQueueTable)
+        if task_table.cursor_row is None or task_table.row_count == 0:
+            self.notify("No task selected", severity="warning")
+            return
+        row_key = task_table.coordinate_to_cell_key(Coordinate(task_table.cursor_row, 0)).row_key
+        task_id = str(row_key.value)
+        self._delete_task_worker(task_id)
+
+    @work(thread=True)
+    def _delete_task_worker(self, task_id: str) -> None:
+        try:
+            task = self.task_backend.get_task(task_id)
+            if task is None:
+                self.call_from_thread(self.notify, f"Task {task_id} not found", severity="error")
+                return
+            self.task_backend.delete_task(task_id)
+            self.call_from_thread(self._refresh_tasks)
+            self.call_from_thread(self.notify, f"Task '{task.title}' deleted")
+        except Exception as e:
+            self.call_from_thread(self.notify, f"Error deleting task: {e}", severity="error")
+
     # --- Quit ---
 
     async def action_quit(self) -> None:
@@ -521,8 +670,9 @@ class OrchestratorApp(App):
         self.push_screen(ConfirmQuitScreen(), callback=on_result)
 
     def action_refresh(self) -> None:
-        """Refresh the worktree table."""
+        """Refresh the worktree table and task queue."""
         self._refresh_table()
+        self._refresh_tasks()
 
 
 def _run_tui(repo_path: Path, config_path: Path | None = None) -> None:

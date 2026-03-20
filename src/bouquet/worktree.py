@@ -3,6 +3,8 @@
 from __future__ import annotations
 
 import contextlib
+import re
+import time
 from datetime import datetime
 from pathlib import Path
 
@@ -10,6 +12,7 @@ from bouquet import git
 from bouquet.bootstrap import bootstrap_worktree
 from bouquet.config import BouquetSettings
 from bouquet.models import SessionState, WorktreeInfo, WorktreeStatus
+from bouquet.tasks.base import Task, TaskQueueBackend, TaskStatus
 from bouquet.template import render_template
 from bouquet.tmux import TmuxManager
 
@@ -255,6 +258,52 @@ class WorktreeManager:
         else:
             win_name = self._window_name(branch)
             self.tmux.switch_to_window(self.session_name, win_name)
+
+    def pick_up_task(
+        self,
+        task: Task,
+        backend: TaskQueueBackend,
+        auto_branch_prefix: str = "task/",
+        agent_profile: str | None = None,
+    ) -> WorktreeInfo:
+        """Pick up a task: create a worktree, mark it in-progress, and send the prompt."""
+        # Generate branch name
+        sanitized = re.sub(r"[^a-z0-9]+", "-", task.title.lower())[:40].strip("-")
+        branch = f"{auto_branch_prefix}{task.id}-{sanitized}"
+
+        # Mark task in-progress
+        backend.update_status(task.id, TaskStatus.IN_PROGRESS, branch=branch)
+
+        # Create worktree
+        info = self.create(branch, agent_profile=agent_profile)
+        info.task_id = task.id
+        self.state.save()
+
+        # Wait for agent to start, then send the task prompt
+        time.sleep(3)
+        prompt = self._build_task_prompt(task)
+        if info.agent_pane_id:
+            self.tmux.send_keys_to_pane(info.agent_pane_id, prompt)
+        elif info.tmux_window_id:
+            self.tmux.send_keys_to_window_id(
+                session_name=self.session_name,
+                window_id=info.tmux_window_id,
+                keys=prompt,
+            )
+
+        return info
+
+    @staticmethod
+    def _build_task_prompt(task: Task) -> str:
+        """Build the prompt string to send to an agent for a task."""
+        parts = [f"Task: {task.title}"]
+        if task.description:
+            parts.append("")
+            parts.append(task.description)
+        if task.url:
+            parts.append("")
+            parts.append(f"Reference: {task.url}")
+        return "\n".join(parts)
 
     def list_active(self) -> list[WorktreeInfo]:
         """Return the list of active worktrees."""

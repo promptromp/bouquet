@@ -12,6 +12,7 @@ from bouquet import __version__
 from bouquet.config import TEMPLATE_CONFIG, BouquetSettings, load_config
 from bouquet.git import get_repo_root, is_git_repo
 from bouquet.models import SessionState
+from bouquet.tasks import create_backend
 from bouquet.tmux import TmuxManager
 from bouquet.worktree import WorktreeManager
 
@@ -161,14 +162,18 @@ def stop(project_name: str | None, repo: Path | None, config_path: Path | None) 
 
     click.echo(f"Stopping session '{state.tmux_session_name}'...")
 
-    # Load config for settings
-    settings = BouquetSettings()
+    # Load real config from repo path
+    settings = load_config(config_path=config_path, repo_path=state.repo_path)
     settings.project.repo_path = str(state.repo_path)
 
     # Create manager and remove all worktrees
     tmux = TmuxManager()
     manager = WorktreeManager(settings, state, tmux)
     manager.remove_all()
+
+    # Reset all IN_PROGRESS tasks (no active worktrees after remove_all)
+    backend = create_backend(settings.task_queue, project_name)
+    backend.reconcile_stale(set())
 
     # Kill tmux session
     tmux.kill_session(state.tmux_session_name)

@@ -222,6 +222,70 @@ class BroadcastResultsScreen(ModalScreen[None]):
         self.dismiss(None)
 
 
+class CreateTaskScreen(ModalScreen[tuple[str, str] | None]):
+    """Modal dialog for creating a new task."""
+
+    CSS = """
+    CreateTaskScreen {
+        align: center middle;
+    }
+
+    #task-dialog {
+        width: 64;
+        height: auto;
+        padding: 1 2;
+        border: thick $accent;
+        background: $surface;
+    }
+
+    #task-dialog Label {
+        margin-bottom: 1;
+    }
+
+    #task-dialog Input {
+        margin-bottom: 1;
+    }
+
+    .button-row {
+        layout: horizontal;
+        height: auto;
+        margin-top: 1;
+    }
+
+    .button-row Button {
+        margin-right: 1;
+    }
+    """
+
+    def compose(self) -> ComposeResult:
+        with Vertical(id="task-dialog"):
+            yield Label("Create Task")
+            yield Label("Title:")
+            yield Input(placeholder="e.g. Fix login page bug", id="task-title-input")
+            yield Label("Description (optional):")
+            yield Input(placeholder="e.g. The login page crashes when...", id="task-desc-input")
+            with Vertical(classes="button-row"):
+                yield Button("Create", variant="primary", id="task-create-btn")
+                yield Button("Cancel", variant="default", id="task-cancel-btn")
+
+    def on_button_pressed(self, event: Button.Pressed) -> None:
+        if event.button.id == "task-create-btn":
+            title = self.query_one("#task-title-input", Input).value.strip()
+            description = self.query_one("#task-desc-input", Input).value.strip()
+            if title:
+                self.dismiss((title, description))
+            else:
+                self.query_one("#task-title-input", Input).focus()
+        else:
+            self.dismiss(None)
+
+    def on_input_submitted(self, event: Input.Submitted) -> None:
+        if event.input.id == "task-title-input":
+            self.query_one("#task-desc-input", Input).focus()
+        elif event.input.id == "task-desc-input":
+            self.query_one("#task-create-btn", Button).press()
+
+
 class SendPromptScreen(ModalScreen[tuple[str, bool] | None]):
     """Send a prompt directly to running agent(s) via tmux send-keys."""
 

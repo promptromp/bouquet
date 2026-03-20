@@ -11,6 +11,8 @@ import bouquet.models as models_mod
 from bouquet.config import AgentProfile, BouquetSettings, ServiceConfig
 from bouquet.git import create_worktree as git_create_worktree
 from bouquet.models import SessionState, WorktreeStatus
+from bouquet.tasks.base import Task, TaskStatus
+from bouquet.tasks.local import LocalBackend
 from bouquet.worktree import WorktreeManager
 
 
@@ -449,3 +451,53 @@ def test_switch_to_uses_window_id(manager: WorktreeManager) -> None:
 
     manager.switch_to("feature/switch-by-id")
     mock_tmux.switch_to_window_by_id.assert_called()
+
+
+# --- Task pickup ---
+
+
+def test_pick_up_task(manager: WorktreeManager, tmp_path: Path) -> None:
+    """pick_up_task should create a worktree, update task status, and send prompt."""
+    backend = LocalBackend(db_path=str(tmp_path / "tasks.db"))
+    task = backend.create_task("Fix login page", description="The login page crashes")
+
+    info = manager.pick_up_task(task, backend, auto_branch_prefix="task/")
+
+    assert info.branch.startswith("task/")
+    assert info.task_id == task.id
+    assert info.status == WorktreeStatus.ACTIVE
+    assert info.path.exists()
+
+    # Task should be in-progress
+    updated = backend.get_task(task.id)
+    assert updated is not None
+    assert updated.status == TaskStatus.IN_PROGRESS
+    assert updated.branch == info.branch
+
+    # Agent should have received the task prompt (first send_keys is agent launch, second is task prompt)
+    mock_tmux = manager.tmux
+    assert isinstance(mock_tmux, MagicMock)
+    calls = mock_tmux.send_keys_to_pane.call_args_list
+    assert len(calls) == 2  # agent launch + task prompt
+    sent_prompt = calls[1][0][1]
+    assert "Fix login page" in sent_prompt
+    assert "The login page crashes" in sent_prompt
+
+
+def test_build_task_prompt_basic() -> None:
+    task = Task(id="1", title="Fix bug", description="Something is broken")
+    prompt = WorktreeManager._build_task_prompt(task)
+    assert "Task: Fix bug" in prompt
+    assert "Something is broken" in prompt
+
+
+def test_build_task_prompt_with_url() -> None:
+    task = Task(id="1", title="Fix bug", url="https://github.com/org/repo/issues/42")
+    prompt = WorktreeManager._build_task_prompt(task)
+    assert "Reference: https://github.com/org/repo/issues/42" in prompt
+
+
+def test_build_task_prompt_no_description() -> None:
+    task = Task(id="1", title="Quick fix")
+    prompt = WorktreeManager._build_task_prompt(task)
+    assert prompt == "Task: Quick fix"

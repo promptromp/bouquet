@@ -49,10 +49,8 @@ Screen {
 }
 
 #detail-container {
-    height: auto;
+    height: 1fr;
     min-height: 7;
-    max-height: 14;
-    margin-bottom: 1;
 }
 
 #tasks-container {

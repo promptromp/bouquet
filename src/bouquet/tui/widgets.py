@@ -3,10 +3,10 @@
 from __future__ import annotations
 
 from rich.text import Text
-from textual.app import ComposeResult
-from textual.widgets import DataTable, Static, TabbedContent, TabPane
+from textual.widgets import DataTable, Static
 
 from bouquet.models import WorktreeInfo, WorktreeStatus
+from bouquet.tasks.base import Task, TaskStatus
 
 
 _STATUS_STYLE: dict[WorktreeStatus, str] = {
@@ -148,23 +148,35 @@ class WorktreeDetailPanel(Static):
             self._rebuild_rows()
 
 
-class DetailTabs(TabbedContent):
-    """Tabbed panel on the right side of the orchestrator."""
-
-    def compose(self) -> ComposeResult:
-        with TabPane("Task Queue", id="tab-task-queue"):
-            yield Static(
-                "No tasks in queue.",
-                id="task-queue-empty",
-            )
+_TASK_STATUS_DISPLAY: dict[TaskStatus, Text] = {
+    TaskStatus.OPEN: Text("○ open", style="cyan"),
+    TaskStatus.IN_PROGRESS: Text("● in progress", style="green"),
+    TaskStatus.DONE: Text("✓ done", style="dim"),
+}
 
 
 class TaskQueueTable(DataTable):
-    """Table for displaying queued tasks (placeholder for future implementation)."""
+    """Table for displaying queued tasks."""
 
     def __init__(self) -> None:
         super().__init__(cursor_type="row")
         self.add_class("task-queue-table")
 
     def on_mount(self) -> None:
-        self.add_columns("Task", "Branch", "Status")
+        self.add_columns("#", "Title", "Status", "Branch", "Created")
+
+    def refresh_tasks(self, tasks: list[Task]) -> None:
+        """Clear and repopulate the table with current task data."""
+        self.clear()
+        for task in tasks:
+            created = task.created_at.strftime("%m-%d %H:%M")
+            status = _TASK_STATUS_DISPLAY.get(task.status, Text(task.status.value))
+            branch = task.branch or "-"
+            self.add_row(
+                task.id,
+                task.title,
+                status,
+                branch,
+                created,
+                key=task.id,
+            )

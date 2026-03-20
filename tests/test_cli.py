@@ -3,12 +3,14 @@
 from __future__ import annotations
 
 import subprocess
+from datetime import datetime
 from pathlib import Path
 from unittest.mock import MagicMock, patch
 
 from click.testing import CliRunner
 
 from bouquet.cli import cli
+from bouquet.models import SessionState
 
 
 @patch("bouquet.cli.TmuxManager")
@@ -96,6 +98,62 @@ def test_stop_no_args_no_config_errors(tmp_path: Path) -> None:
 
     assert result.exit_code != 0
     assert "no project name" in result.output.lower() or "no .bouquet.toml" in result.output.lower()
+
+
+@patch("bouquet.cli.create_backend")
+@patch("bouquet.cli.TmuxManager")
+def test_stop_reconciles_stale_tasks(mock_tmux_cls: MagicMock, mock_create_backend: MagicMock, tmp_path: Path) -> None:
+    """bouquet stop should reset all IN_PROGRESS tasks via reconcile_stale(set())."""
+    repo = _make_git_repo(tmp_path / "repo")
+    (repo / ".bouquet.toml").write_text('[project]\nname = "my-proj"\n')
+
+    # Create a real session state file
+    state = SessionState(
+        project_name="my-proj",
+        tmux_session_name="bouquet-my-proj",
+        repo_path=repo,
+        created_at=datetime(2026, 3, 20, 10, 0),
+    )
+    state_dir = tmp_path / "state"
+    state_dir.mkdir()
+
+    mock_backend = mock_create_backend.return_value
+
+    with patch.object(SessionState, "state_dir", return_value=state_dir):
+        state.save()
+        runner = CliRunner()
+        result = runner.invoke(cli, ["stop", "--repo", str(repo)])
+
+    assert result.exit_code == 0
+    mock_backend.reconcile_stale.assert_called_once_with(set())
+
+
+@patch("bouquet.cli.create_backend")
+@patch("bouquet.cli.TmuxManager")
+def test_stop_with_explicit_name_reconciles(
+    mock_tmux_cls: MagicMock, mock_create_backend: MagicMock, tmp_path: Path
+) -> None:
+    """bouquet stop <name> should also reconcile tasks."""
+    repo = _make_git_repo(tmp_path / "repo")
+
+    state = SessionState(
+        project_name="my-proj",
+        tmux_session_name="bouquet-my-proj",
+        repo_path=repo,
+        created_at=datetime(2026, 3, 20, 10, 0),
+    )
+    state_dir = tmp_path / "state"
+    state_dir.mkdir()
+
+    mock_backend = mock_create_backend.return_value
+
+    with patch.object(SessionState, "state_dir", return_value=state_dir):
+        state.save()
+        runner = CliRunner()
+        result = runner.invoke(cli, ["stop", "my-proj"])
+
+    assert result.exit_code == 0
+    mock_backend.reconcile_stale.assert_called_once_with(set())
 
 
 def _make_git_repo(path: Path) -> Path:

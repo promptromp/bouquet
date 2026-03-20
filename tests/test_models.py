@@ -123,3 +123,37 @@ def test_worktree_info_index_serialization(tmp_path: Path, monkeypatch: object) 
     loaded = SessionState.load("idx-test")
     assert loaded is not None
     assert loaded.worktrees[0].index == 5
+
+
+def test_worktree_info_task_id_default() -> None:
+    info = WorktreeInfo(branch="feat/a", path=Path("/tmp/wt"))
+    assert info.task_id is None
+
+
+def test_worktree_info_task_id_serialization(tmp_path: Path, monkeypatch: object) -> None:
+    monkeypatch.setattr(  # type: ignore[attr-defined]
+        models_mod.SessionState,
+        "state_dir",
+        classmethod(lambda cls: tmp_path),
+    )
+
+    state = SessionState(
+        project_name="task-test",
+        tmux_session_name="bouquet-task-test",
+        repo_path=Path("/tmp/repo"),
+        worktrees=[
+            WorktreeInfo(branch="feat/x", path=Path("/tmp/wt/x"), task_id="42"),
+        ],
+    )
+    state.save()
+
+    loaded = SessionState.load("task-test")
+    assert loaded is not None
+    assert loaded.worktrees[0].task_id == "42"
+
+
+def test_worktree_info_task_id_backward_compat() -> None:
+    """Old JSON without task_id deserializes with task_id=None."""
+    data = '{"branch": "feature/x", "path": "/tmp/wt", "status": "active", "created_at": "2026-03-18T10:00:00"}'
+    wt = WorktreeInfo.model_validate_json(data)
+    assert wt.task_id is None

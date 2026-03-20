@@ -30,6 +30,7 @@ class WorktreeInfo(BaseModel):
     agent_profile: str | None = None
     agent_pane_id: str | None = None
     auto_accept: bool = False
+    task_id: str | None = None
 
 
 class SessionState(BaseModel):

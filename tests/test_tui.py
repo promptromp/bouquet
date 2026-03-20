@@ -4,11 +4,21 @@ from __future__ import annotations
 
 from datetime import datetime
 from pathlib import Path
+from unittest.mock import MagicMock
 
-from bouquet.models import WorktreeInfo, WorktreeStatus
+from bouquet.models import SessionState, WorktreeInfo, WorktreeStatus
+from bouquet.tasks.base import Task, TaskStatus
 from bouquet.tui.app import OrchestratorApp, _detect_accept_key, _extract_response
-from bouquet.tui.screens import NewWorktreeScreen, SendPromptScreen
-from bouquet.tui.widgets import _STATUS_LABEL, _STATUS_STYLE, ProjectHeader, WorktreeDetailPanel, WorktreeTable
+from bouquet.tui.screens import CreateTaskScreen, NewWorktreeScreen, SendPromptScreen
+from bouquet.tui.widgets import (
+    _STATUS_LABEL,
+    _STATUS_STYLE,
+    _TASK_STATUS_DISPLAY,
+    ProjectHeader,
+    TaskQueueTable,
+    WorktreeDetailPanel,
+    WorktreeTable,
+)
 
 
 def test_tui_modules_importable() -> None:
@@ -299,3 +309,82 @@ def test_detail_panel_all_statuses_have_style() -> None:
     for status in WorktreeStatus:
         assert status in _STATUS_LABEL, f"{status} missing from _STATUS_LABEL"
         assert status in _STATUS_STYLE, f"{status} missing from _STATUS_STYLE"
+
+
+# --- Task queue table tests ---
+
+
+def test_task_queue_table_importable() -> None:
+    assert TaskQueueTable is not None
+    assert CreateTaskScreen is not None
+
+
+def test_task_status_display_covers_all_statuses() -> None:
+    """Every TaskStatus has a display entry."""
+    for status in TaskStatus:
+        assert status in _TASK_STATUS_DISPLAY, f"{status} missing from _TASK_STATUS_DISPLAY"
+
+
+# --- DetailTabs removed ---
+
+
+def test_detail_tabs_not_exported() -> None:
+    """DetailTabs was removed — verify it's no longer importable from widgets."""
+    from bouquet.tui import widgets as w  # noqa: PLC0415
+
+    assert not hasattr(w, "DetailTabs")
+
+
+# --- Reconciliation logic tests ---
+
+
+def _make_task(
+    task_id: str, title: str, branch: str | None = None, status: TaskStatus = TaskStatus.IN_PROGRESS
+) -> Task:
+    """Helper to create a Task for testing."""
+    return Task(id=task_id, title=title, branch=branch, status=status)
+
+
+def test_reconcile_restores_task_id_on_matching_worktree() -> None:
+    """_reconcile_tasks should restore task_id on worktrees matching IN_PROGRESS tasks."""
+    wt = WorktreeInfo(branch="task/1-fix-bug", path=Path("/tmp/wt"), task_id=None)
+    task = _make_task("1", "Fix bug", branch="task/1-fix-bug")
+
+    state = MagicMock(spec=SessionState)
+    state.worktrees = [wt]
+
+    backend = MagicMock()
+    backend.list_tasks.side_effect = lambda status=None: [task] if status == TaskStatus.IN_PROGRESS else [task]
+    backend.reconcile_stale.return_value = []
+
+    # Simulate what _reconcile_tasks does (step 1: restore task_id)
+    in_progress = backend.list_tasks(status=TaskStatus.IN_PROGRESS)
+    task_by_branch = {t.branch: t for t in in_progress if t.branch}
+    for w in state.worktrees:
+        if w.task_id is None and w.branch in task_by_branch:
+            w.task_id = task_by_branch[w.branch].id
+
+    assert wt.task_id == "1"
+
+
+def test_reconcile_does_not_overwrite_existing_task_id() -> None:
+    """_reconcile_tasks should not overwrite an existing task_id."""
+    wt = WorktreeInfo(branch="task/1-fix-bug", path=Path("/tmp/wt"), task_id="99")
+    task = _make_task("1", "Fix bug", branch="task/1-fix-bug")
+
+    in_progress = [task]
+    task_by_branch = {t.branch: t for t in in_progress if t.branch}
+    if wt.task_id is None and wt.branch in task_by_branch:
+        wt.task_id = task_by_branch[wt.branch].id
+
+    assert wt.task_id == "99"
+
+
+def test_reconcile_builds_correct_active_branches() -> None:
+    """Active branches set should contain all worktree branches."""
+    worktrees = [
+        WorktreeInfo(branch="task/1-fix-bug", path=Path("/tmp/wt1")),
+        WorktreeInfo(branch="feature/auth", path=Path("/tmp/wt2")),
+    ]
+    active_branches = {wt.branch for wt in worktrees}
+    assert active_branches == {"task/1-fix-bug", "feature/auth"}

@@ -151,6 +151,31 @@ setup_commands = [
     assert "https://example.com" in settings.bootstrap.setup_commands[1]
 
 
+def test_default_task_queue_config() -> None:
+    settings = BouquetSettings()
+    assert settings.task_queue.backend == "local"
+    assert settings.task_queue.label_filter == "bouquet"
+    assert settings.task_queue.sqlite_path is None
+    assert settings.task_queue.auto_branch_prefix == "task/"
+
+
+def test_task_queue_from_toml(tmp_git_repo: Path) -> None:
+    config = tmp_git_repo / ".bouquet.toml"
+    config.write_text("""\
+[project]
+name = "tq-test"
+
+[task_queue]
+backend = "github"
+label_filter = "agent"
+auto_branch_prefix = "work/"
+""")
+    settings = load_config(repo_path=tmp_git_repo)
+    assert settings.task_queue.backend == "github"
+    assert settings.task_queue.label_filter == "agent"
+    assert settings.task_queue.auto_branch_prefix == "work/"
+
+
 def test_services_from_toml(tmp_git_repo: Path) -> None:
     config = tmp_git_repo / ".bouquet.toml"
     config.write_text("""\

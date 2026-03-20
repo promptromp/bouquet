@@ -64,6 +64,13 @@ class TmuxConfig(BaseModel):
     layout: str | None = "services-top"
 
 
+class TaskQueueConfig(BaseModel):
+    backend: str = "local"
+    label_filter: str = "bouquet"
+    sqlite_path: str | None = None
+    auto_branch_prefix: str = "task/"
+
+
 class BouquetSettings(BaseSettings):
     model_config = {"env_prefix": "BOUQUET_"}
 
@@ -72,6 +79,7 @@ class BouquetSettings(BaseSettings):
     bootstrap: BootstrapConfig = Field(default_factory=BootstrapConfig)
     tmux: TmuxConfig = Field(default_factory=TmuxConfig)
     services: list[ServiceConfig] = Field(default_factory=list)
+    task_queue: TaskQueueConfig = Field(default_factory=TaskQueueConfig)
 
 
 def _load_toml(path: Path) -> dict[str, Any]:
@@ -211,4 +219,20 @@ layout = "services-top"      # services in a row on top, agent at bottom (defaul
 # name = "logs"
 # command = "tail -f /tmp/{{{{ BOUQUET_PROJECT_NAME }}}}-{{{{ BOUQUET_WORKTREE_INDEX }}}}.log"
 # ---------------------------------------------------------------------------
+
+# ---------------------------------------------------------------------------
+# Task Queue — manage work items and auto-create worktrees for them.
+#
+# Create tasks in the TUI with `c`, then pick one up with `x` to
+# automatically create a worktree and send the task description to the agent.
+#
+# Backend options:
+#   "local"  — SQLite DB in ~/.local/state/bouquet/ (default, zero setup)
+#   "github" — GitHub Issues via `gh` CLI (Phase 2)
+# ---------------------------------------------------------------------------
+[task_queue]
+backend = "local"
+# label_filter = "bouquet"       # GitHub backend: only show issues with this label
+# sqlite_path = ""               # Override default SQLite path (~/.local/state/bouquet/<project>.tasks.db)
+auto_branch_prefix = "task/"     # Branch prefix when picking up a task (e.g. task/42-fix-login)
 """
