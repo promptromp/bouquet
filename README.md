@@ -34,6 +34,7 @@ bouquet start              # TUI launches, create worktrees, agents spin up
 
 - Python 3.14+
 - [tmux](https://github.com/tmux/tmux) (`brew install tmux`)
+- [GitHub CLI](https://cli.github.com/) (optional, `brew install gh` — enables PR link lookup in the TUI)
 - [direnv](https://direnv.net/) (optional, `brew install direnv`)
 - Language package managers as needed (`uv`, `pnpm`)
 

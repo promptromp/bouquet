@@ -45,7 +45,9 @@ class AgentConfig(BaseModel):
 
 
 class BootstrapConfig(BaseModel):
+    setup_commands: list[str] = Field(default_factory=list)
     copy_env_files: list[str] = Field(default_factory=lambda: [".env", ".env.local", ".envrc"])
+    python_version: str | None = None
     python_deps_command: str = "uv sync"
     node_deps_command: str = "pnpm install"
     use_cow_clone: bool = True
@@ -59,7 +61,7 @@ class ServiceConfig(BaseModel):
 
 class TmuxConfig(BaseModel):
     session_prefix: str = "bouquet"
-    layout: str | None = None
+    layout: str | None = "services-top"
 
 
 class BouquetSettings(BaseSettings):
@@ -140,7 +142,17 @@ args = []
 # args = ["--model", "claude-sonnet-4-20250514"]
 
 [bootstrap]
+# setup_commands run in a single bash shell before dependency installation.
+# Environment variables exported by these commands are captured and propagated
+# to dependency install commands and to tmux service panes.
+#
+# setup_commands = [
+#     "export TOKEN=$(some-auth-command --output text)",
+#     "export UV_EXTRA_INDEX_URL=\"https://user:$TOKEN@private.registry/simple/\"",
+# ]
+setup_commands = []
 copy_env_files = [".env", ".env.local", ".envrc"]
+# python_version = "3.13"   # Pin Python version in worktrees (runs `uv python pin`)
 python_deps_command = "uv sync"
 node_deps_command = "pnpm install"
 use_cow_clone = true
@@ -148,7 +160,8 @@ direnv_allow = true
 
 [tmux]
 session_prefix = "bouquet"
-# layout = "main-vertical"   # tmux layout: main-vertical, tiled, even-horizontal, etc.
+layout = "services-top"      # services in a row on top, agent at bottom (default)
+# layout = "main-vertical"   # or any tmux layout: main-vertical, tiled, even-horizontal, etc.
 
 # ---------------------------------------------------------------------------
 # Services — optional processes to run alongside the agent in each worktree.

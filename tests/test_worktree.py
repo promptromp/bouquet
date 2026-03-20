@@ -232,6 +232,107 @@ def test_create_without_services_no_panes(manager: WorktreeManager) -> None:
     mock_tmux.setup_service_panes.assert_not_called()
 
 
+# --- services-top layout ---
+
+
+def test_create_with_services_uses_default_layout(
+    sample_settings: BouquetSettings,
+    tmp_git_repo: Path,
+    tmp_path: Path,
+    monkeypatch: object,
+) -> None:
+    """Default layout should be services-top."""
+    state_dir = tmp_path / "state"
+    state_dir.mkdir()
+    monkeypatch.setattr(  # type: ignore[attr-defined]
+        models_mod.SessionState,
+        "state_dir",
+        classmethod(lambda cls: state_dir),
+    )
+
+    sample_settings.bootstrap.python_deps_command = ""
+    sample_settings.bootstrap.node_deps_command = ""
+    sample_settings.bootstrap.copy_env_files = []
+    sample_settings.bootstrap.use_cow_clone = False
+    sample_settings.services = [
+        ServiceConfig(name="api", command="serve"),
+    ]
+    # Don't set layout — should default to "services-top"
+
+    tmux = MagicMock()
+    mock_window = MagicMock()
+    mock_window.window_id = "@1"
+    tmux.create_window.return_value = mock_window
+
+    state = SessionState(
+        project_name="test-project",
+        tmux_session_name="bouquet-test-project",
+        repo_path=tmp_git_repo,
+    )
+    state.save()
+
+    mgr = WorktreeManager(sample_settings, state, tmux)
+    mgr.create("feature/default-layout")
+
+    call_kwargs = tmux.setup_service_panes.call_args
+    assert call_kwargs.kwargs.get("layout") == "services-top"
+
+
+# --- Setup commands env propagation to tmux ---
+
+
+def test_create_with_setup_commands_sets_tmux_env(
+    sample_settings: BouquetSettings,
+    tmp_git_repo: Path,
+    tmp_path: Path,
+    monkeypatch: object,
+) -> None:
+    """Setup command env vars should be set on the tmux session."""
+    state_dir = tmp_path / "state"
+    state_dir.mkdir()
+    monkeypatch.setattr(  # type: ignore[attr-defined]
+        models_mod.SessionState,
+        "state_dir",
+        classmethod(lambda cls: state_dir),
+    )
+
+    sample_settings.bootstrap.setup_commands = ["export BOUQUET_TMUX_TEST=hello"]
+    sample_settings.bootstrap.python_deps_command = ""
+    sample_settings.bootstrap.node_deps_command = ""
+    sample_settings.bootstrap.copy_env_files = []
+    sample_settings.bootstrap.use_cow_clone = False
+
+    tmux = MagicMock()
+    mock_window = MagicMock()
+    mock_window.window_id = "@1"
+    tmux.create_window.return_value = mock_window
+
+    state = SessionState(
+        project_name="test-project",
+        tmux_session_name="bouquet-test-project",
+        repo_path=tmp_git_repo,
+    )
+    state.save()
+
+    mgr = WorktreeManager(sample_settings, state, tmux)
+    mgr.create("feature/setup-env-test")
+
+    # Verify set_session_environment was called with the exported var
+    tmux.set_session_environment.assert_any_call(
+        "bouquet-test-project",
+        "BOUQUET_TMUX_TEST",
+        "hello",
+    )
+
+
+def test_create_without_setup_commands_no_tmux_env(manager: WorktreeManager) -> None:
+    """Without setup_commands, set_session_environment should not be called."""
+    manager.create("feature/no-setup")
+    mock_tmux = manager.tmux
+    assert isinstance(mock_tmux, MagicMock)
+    mock_tmux.set_session_environment.assert_not_called()
+
+
 # --- Window name bug fix ---
 
 

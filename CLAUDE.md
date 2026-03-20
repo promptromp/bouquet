@@ -28,8 +28,9 @@ CLI (Click) → bouquet start/stop/init (args optional, infers from cwd + .bouqu
        ├─► git.py         subprocess calls for worktree CRUD
        ├─► tmux.py        libtmux wrapper for session/window/pane lifecycle
        ├─► template.py    safe {{ expr }} rendering for service commands
-       ├─► bootstrap.py   env file copy, CoW clone .venv/node_modules, dep install
+       ├─► bootstrap.py   setup commands + env capture, env file copy, CoW clone, dep install
        ├─► activity.py    ActivityMonitor — pane scraping for live status
+       ├─► github.py      gh CLI wrapper for PR URL lookup
        └─► TUI (tui/app.py — Textual app in tmux window 0)
             └─► spawns worktree windows via WorktreeManager
 ```
@@ -52,6 +53,10 @@ CLI (Click) → bouquet start/stop/init (args optional, infers from cwd + .bouqu
 - **Window-ID-based tmux operations** — `TmuxManager` has both name-based (legacy) and ID-based methods. Prefer ID-based (`send_keys_to_window_id`, `switch_to_window_by_id`, `kill_window_by_id`) to avoid window name collisions.
 - **Activity polling** — `ActivityMonitor` runs every 2s in the TUI via `set_interval` + `@work(thread=True)`. SHA256 hashing of pane content; hash change → RUNNING, stable 3+ polls → IDLE (or WAITING if a permission prompt is detected).
 - **Agent profiles** — `AgentConfig.resolve_profile(name)` resolves a named profile or falls back to the top-level `command`/`args`. Backward-compatible: old configs without `profiles` work unchanged.
+- **Bootstrap setup commands** — `BootstrapConfig.setup_commands` runs shell commands in a single bash context before dependency installation. Env vars exported by these commands are captured (via a `python3` JSON dump to a temp file — portable across macOS/Linux) and propagated to deps install subprocesses and the tmux session (via `set_environment`). Use case: private registry auth (e.g. AWS CodeArtifact tokens).
+- **Bootstrap python_version** — Optional `BootstrapConfig.python_version` runs `uv python pin <version>` in the worktree before dependency installation. Ensures consistent Python version across worktrees regardless of what's available on the system.
+- **GitHub PR lookup** — `github.py` is a thin `gh` CLI wrapper (same pattern as `git.py`). PR URLs are cached per branch in `WorktreeDetailPanel._pr_cache` (simple dict, no TTL). The `gh` CLI is optional — missing `gh` degrades gracefully with no PR field shown and no error. Lookups run in a `@work(thread=True, group="pr-lookup")` worker so rapid cursor movement cancels stale lookups. PR links use Rich `[link=URL]` markup (OSC 8 terminal hyperlinks).
+- **services-top layout** — Default tmux layout (`TmuxConfig.layout = "services-top"`). Arranges service panes in an equal-width horizontal row across the top (~40%) with the agent pane spanning full width at the bottom (~60%). Implemented via custom splits in `TmuxManager._setup_services_top()`, not a tmux built-in layout. Any other layout value is passed through to `select_layout` as a standard tmux layout name.
 
 ## Configuration
 

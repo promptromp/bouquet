@@ -18,6 +18,7 @@ from textual.widgets import Footer, Static
 from bouquet.activity import POLLABLE_STATUSES, ActivityMonitor
 from bouquet.agents.base import AgentResponse
 from bouquet.config import BouquetSettings, load_config
+from bouquet.github import GitHubError, lookup_pr_url
 from bouquet.models import SessionState, WorktreeInfo, WorktreeStatus
 from bouquet.tmux import TmuxManager
 from bouquet.tui.screens import (
@@ -26,7 +27,7 @@ from bouquet.tui.screens import (
     NewWorktreeScreen,
     SendPromptScreen,
 )
-from bouquet.tui.widgets import DetailTabs, ProjectHeader, WorktreeTable
+from bouquet.tui.widgets import DetailTabs, ProjectHeader, WorktreeDetailPanel, WorktreeTable
 from bouquet.worktree import WorktreeManager
 
 
@@ -86,10 +87,15 @@ class OrchestratorApp(App):
                     id="empty-state",
                 )
             with Vertical(id="right-panel"):
-                yield DetailTabs()
+                with Vertical(id="detail-container"):
+                    yield WorktreeDetailPanel()
+                with Vertical(id="tasks-container"):
+                    yield DetailTabs()
         yield Footer()
 
     def on_mount(self) -> None:
+        self.query_one("#detail-container").border_title = "Details"
+        self.query_one("#tasks-container").border_title = "Tasks"
         self._refresh_table()
         self.set_interval(2.0, self._poll_activity)
 
@@ -100,6 +106,11 @@ class OrchestratorApp(App):
         empty = self.query_one("#empty-state", Static)
         empty.display = not worktrees
         table.display = bool(worktrees)
+        # Re-render detail panel for the currently selected branch
+        detail = self.query_one(WorktreeDetailPanel)
+        if detail._current_branch:
+            wt = next((w for w in worktrees if w.branch == detail._current_branch), None)
+            detail.show_worktree(wt)
 
     def _sendable_worktrees(self) -> list[WorktreeInfo]:
         """Return worktrees that have a tmux window and are in a pollable state."""
@@ -166,6 +177,29 @@ class OrchestratorApp(App):
             self.session_state.worktrees = [w for w in self.session_state.worktrees if w.branch != branch]
             self.call_from_thread(self._refresh_table)
             self.call_from_thread(self.notify, f"Error creating worktree: {e}", severity="error")
+
+    def on_data_table_row_highlighted(self, event: WorktreeTable.RowHighlighted) -> None:
+        """Update the detail panel when the cursor moves to a new row."""
+        if event.row_key is None:
+            return
+        row_data = event.data_table.get_row(event.row_key)
+        branch = str(row_data[1])  # Column 1 is Branch
+        wt = next((w for w in self.session_state.worktrees if w.branch == branch), None)
+        detail = self.query_one(WorktreeDetailPanel)
+        detail.show_worktree(wt)
+        if wt and branch not in detail._pr_cache and branch not in detail._pr_pending:
+            detail.mark_pr_pending(branch)
+            self._lookup_pr(branch)
+
+    @work(thread=True, group="pr-lookup")
+    def _lookup_pr(self, branch: str) -> None:
+        """Look up the PR URL for a branch in the background."""
+        try:
+            url = lookup_pr_url(branch, cwd=Path(self.settings.project.repo_path))
+        except GitHubError:
+            url = None
+        detail = self.query_one(WorktreeDetailPanel)
+        self.call_from_thread(detail.set_pr_url, branch, url)
 
     def on_data_table_row_selected(self, event: WorktreeTable.RowSelected) -> None:
         """Handle Enter on a table row — switch to that worktree's tmux window."""

@@ -45,9 +45,9 @@ def test_default_services_empty() -> None:
     assert settings.services == []
 
 
-def test_default_layout_none() -> None:
+def test_default_layout_services_top() -> None:
     settings = BouquetSettings()
-    assert settings.tmux.layout is None
+    assert settings.tmux.layout == "services-top"
 
 
 def test_default_agent_profiles_empty() -> None:
@@ -121,6 +121,34 @@ args = ["--model", "sonnet"]
     assert settings.agent.default_profile == "aider"
     assert settings.agent.profiles[1].name == "aider"
     assert settings.agent.profiles[1].args == ["--model", "sonnet"]
+
+
+def test_default_python_version_none() -> None:
+    settings = BouquetSettings()
+    assert settings.bootstrap.python_version is None
+
+
+def test_default_setup_commands_empty() -> None:
+    settings = BouquetSettings()
+    assert settings.bootstrap.setup_commands == []
+
+
+def test_setup_commands_from_toml(tmp_git_repo: Path) -> None:
+    config = tmp_git_repo / ".bouquet.toml"
+    config.write_text("""\
+[project]
+name = "setup-test"
+
+[bootstrap]
+setup_commands = [
+    "export TOKEN=abc",
+    'export URL="https://example.com"',
+]
+""")
+    settings = load_config(repo_path=tmp_git_repo)
+    assert len(settings.bootstrap.setup_commands) == 2
+    assert settings.bootstrap.setup_commands[0] == "export TOKEN=abc"
+    assert "https://example.com" in settings.bootstrap.setup_commands[1]
 
 
 def test_services_from_toml(tmp_git_repo: Path) -> None:
