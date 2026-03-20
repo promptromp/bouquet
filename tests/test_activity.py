@@ -89,3 +89,31 @@ def test_has_permission_prompt_patterns() -> None:
     assert ActivityMonitor._has_permission_prompt("line1\nline2\nApprove?")
     assert ActivityMonitor._has_permission_prompt("(y/n)")
     assert not ActivityMonitor._has_permission_prompt("normal output")
+
+
+def test_check_uses_pane_id_when_provided() -> None:
+    """check() should use capture_pane_by_id when agent_pane_id is given."""
+    monitor, tmux = _make_monitor()
+    tmux.capture_pane_by_id.return_value = "hello"
+    monitor.check("sess", "@1", agent_pane_id="%42")
+    tmux.capture_pane_by_id.assert_called_once_with("%42")
+    tmux.capture_pane.assert_not_called()
+
+
+def test_check_falls_back_to_window_without_pane_id() -> None:
+    """check() should use capture_pane when agent_pane_id is None."""
+    monitor, tmux = _make_monitor()
+    tmux.capture_pane.return_value = "hello"
+    monitor.check("sess", "@1", agent_pane_id=None)
+    tmux.capture_pane.assert_called_once_with("sess", "@1")
+    tmux.capture_pane_by_id.assert_not_called()
+
+
+def test_check_with_pane_id_detects_waiting() -> None:
+    """WAITING detection works through the pane-ID capture path."""
+    monitor, tmux = _make_monitor(stability_threshold=2)
+    content = "some output\nDo you want to proceed? [Y/n]"
+    tmux.capture_pane_by_id.return_value = content
+    monitor.check("sess", "@1", agent_pane_id="%42")  # first poll
+    monitor.check("sess", "@1", agent_pane_id="%42")  # stable 1
+    assert monitor.check("sess", "@1", agent_pane_id="%42") == WorktreeStatus.WAITING

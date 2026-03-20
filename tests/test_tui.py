@@ -7,6 +7,7 @@ from pathlib import Path
 
 from rich.table import Table
 from rich.text import Text
+from textual.geometry import Size
 
 from bouquet.models import WorktreeInfo, WorktreeStatus
 from bouquet.tui.app import OrchestratorApp, _detect_accept_key, _extract_response
@@ -279,6 +280,27 @@ def test_detect_accept_key_handles_cursor_on_option_2() -> None:
    3. No
 """
     assert _detect_accept_key(content) == "2"
+
+
+def test_detail_panel_content_height_empty() -> None:
+    """get_content_height returns 1 when no worktree is shown."""
+    panel = WorktreeDetailPanel()
+    assert panel.get_content_height(Size(80, 24), Size(80, 24), 80) == 1
+
+
+def test_detail_panel_content_height_with_rows() -> None:
+    """get_content_height returns the number of rows when a worktree is shown."""
+    panel = WorktreeDetailPanel()
+    wt = WorktreeInfo(
+        branch="feature/x",
+        path=Path("/tmp/wt"),
+        status=WorktreeStatus.ACTIVE,
+        created_at=datetime(2026, 3, 18, 10, 0),
+    )
+    panel.show_worktree(wt)
+    height = panel.get_content_height(Size(80, 24), Size(80, 24), 80)
+    assert height == len(panel._rows)
+    assert height >= 7  # Branch, Status, Accept, Profile, Window, Path, Created
 
 
 def test_detail_panel_all_statuses_have_style() -> None:

@@ -8,7 +8,7 @@ from unittest.mock import MagicMock
 import pytest
 
 import bouquet.models as models_mod
-from bouquet.config import BouquetSettings, ServiceConfig
+from bouquet.config import AgentProfile, BouquetSettings, ServiceConfig
 from bouquet.git import create_worktree as git_create_worktree
 from bouquet.models import SessionState, WorktreeStatus
 from bouquet.worktree import WorktreeManager
@@ -397,8 +397,6 @@ def test_agent_profile_args_sent_to_tmux(
     monkeypatch: object,
 ) -> None:
     """Named profile args should be sent to tmux instead of top-level args."""
-    from bouquet.config import AgentProfile
-
     state_dir = tmp_path / "state"
     state_dir.mkdir()
     monkeypatch.setattr(  # type: ignore[attr-defined]
