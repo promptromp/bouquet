@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import hashlib
 import os
+import re
 import sys
 import time
 from pathlib import Path
@@ -29,6 +30,26 @@ from bouquet.tui.screens import (
 )
 from bouquet.tui.widgets import DetailTabs, ProjectHeader, WorktreeDetailPanel, WorktreeTable
 from bouquet.worktree import WorktreeManager
+
+
+_RE_AUTO_ACCEPT = re.compile(r"^\s*[❯ ]\s*(\d+)\.\s*Yes,?\s+and\s+don't\s+ask\s+again", re.MULTILINE)
+_RE_YES = re.compile(r"^\s*[❯ ]\s*(\d+)\.\s*Yes\s*$", re.MULTILINE)
+
+
+def _detect_accept_key(content: str) -> str | None:
+    """Detect the right key to send for a permission prompt.
+
+    Returns the option number for "Yes, and don't ask again" if available,
+    then falls back to plain "Yes", then None for non-numbered prompts.
+    """
+    last_lines = "\n".join(content.splitlines()[-15:])
+    m = _RE_AUTO_ACCEPT.search(last_lines)
+    if m:
+        return m.group(1)
+    m = _RE_YES.search(last_lines)
+    if m:
+        return m.group(1)
+    return None
 
 
 def _extract_response(content: str, prompt: str) -> str:
@@ -118,6 +139,37 @@ class OrchestratorApp(App):
         """Return worktrees that have a tmux window and are in a pollable state."""
         return [wt for wt in self.session_state.worktrees if wt.tmux_window_id and wt.status in POLLABLE_STATUSES]
 
+    def _send_auto_accept(self, wt: WorktreeInfo) -> None:
+        """Send the right key sequence to accept a permission prompt.
+
+        For Claude Code numbered menus, prefers "Yes, and don't ask again"
+        over plain "Yes". Falls back to "y" for traditional [Y/n] prompts.
+        """
+        if wt.agent_pane_id:
+            content = self.manager.tmux.capture_pane_by_id(wt.agent_pane_id)
+        else:
+            content = self.manager.tmux.capture_pane(
+                self.session_state.tmux_session_name, wt.tmux_window_id  # type: ignore[arg-type]
+            )
+
+        key = _detect_accept_key(content)
+        if key:
+            # Claude Code numbered menu: type the option number (no Enter — the menu accepts on keypress)
+            if wt.agent_pane_id:
+                self.manager.tmux.send_keys_to_pane(wt.agent_pane_id, key, enter=False)
+            else:
+                self.manager.tmux.send_keys_to_window_id(
+                    self.session_state.tmux_session_name, wt.tmux_window_id, key, enter=False  # type: ignore[arg-type]
+                )
+        else:
+            # Traditional [Y/n] prompt: send "y" + Enter
+            if wt.agent_pane_id:
+                self.manager.tmux.send_keys_to_pane(wt.agent_pane_id, "y")
+            else:
+                self.manager.tmux.send_keys_to_window_id(
+                    self.session_state.tmux_session_name, wt.tmux_window_id, "y"  # type: ignore[arg-type]
+                )
+
     # --- Activity polling ---
 
     def _poll_activity(self) -> None:
@@ -139,7 +191,7 @@ class OrchestratorApp(App):
                     if new_status != wt.status:
                         wt.status = new_status
                         changed = True
-                    # Auto-accept: send "y" when WAITING and auto_accept is on
+                    # Auto-accept: accept prompt when WAITING and auto_accept is on
                     guard_key = wt.agent_pane_id or wt.tmux_window_id
                     if (
                         new_status == WorktreeStatus.WAITING
@@ -147,12 +199,7 @@ class OrchestratorApp(App):
                         and guard_key not in self._recently_accepted
                     ):
                         try:
-                            if wt.agent_pane_id:
-                                self.manager.tmux.send_keys_to_pane(wt.agent_pane_id, "y")
-                            else:
-                                self.manager.tmux.send_keys_to_window_id(
-                                    self.session_state.tmux_session_name, wt.tmux_window_id, "y"
-                                )
+                            self._send_auto_accept(wt)
                             self._recently_accepted.add(guard_key)
                         except Exception:
                             pass

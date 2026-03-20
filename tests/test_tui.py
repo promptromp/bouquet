@@ -9,7 +9,7 @@ from rich.table import Table
 from rich.text import Text
 
 from bouquet.models import WorktreeInfo, WorktreeStatus
-from bouquet.tui.app import OrchestratorApp, _extract_response
+from bouquet.tui.app import OrchestratorApp, _detect_accept_key, _extract_response
 from bouquet.tui.screens import NewWorktreeScreen, SendPromptScreen
 from bouquet.tui.widgets import _STATUS_LABEL, _STATUS_STYLE, ProjectHeader, WorktreeDetailPanel, WorktreeTable
 
@@ -238,6 +238,47 @@ def test_detail_panel_auto_accept_off() -> None:
     )
     panel.show_worktree(wt)
     assert "off" in panel._rows["Accept"]
+
+
+# --- _detect_accept_key tests ---
+
+
+def test_detect_accept_key_prefers_dont_ask_again() -> None:
+    """Should return the option number for 'Yes, and don't ask again'."""
+    content = """\
+ Do you want to proceed?
+ ❯ 1. Yes
+   2. Yes, and don't ask again for: git rebase:*
+   3. No
+"""
+    assert _detect_accept_key(content) == "2"
+
+
+def test_detect_accept_key_falls_back_to_yes() -> None:
+    """When no 'don't ask again' option, returns the plain Yes option."""
+    content = """\
+ Do you want to proceed?
+ ❯ 1. Yes
+   2. No
+"""
+    assert _detect_accept_key(content) == "1"
+
+
+def test_detect_accept_key_returns_none_for_traditional_prompt() -> None:
+    """Returns None for [Y/n] style prompts (no numbered options)."""
+    content = "Continue? [Y/n] "
+    assert _detect_accept_key(content) is None
+
+
+def test_detect_accept_key_handles_cursor_on_option_2() -> None:
+    """Works when cursor is already on option 2."""
+    content = """\
+ Do you want to proceed?
+   1. Yes
+ ❯ 2. Yes, and don't ask again for: ruff check
+   3. No
+"""
+    assert _detect_accept_key(content) == "2"
 
 
 def test_detail_panel_all_statuses_have_style() -> None:
