@@ -2,12 +2,8 @@
 
 from __future__ import annotations
 
-from rich.console import RenderableType
-from rich.table import Table
 from rich.text import Text
 from textual.app import ComposeResult
-from textual.geometry import Size
-from textual.widget import Widget
 from textual.widgets import DataTable, Static, TabbedContent, TabPane
 
 from bouquet.models import WorktreeInfo, WorktreeStatus
@@ -84,33 +80,22 @@ class WorktreeTable(DataTable):
             )
 
 
-class WorktreeDetailPanel(Widget):
-    """Displays details about the currently highlighted worktree as a Rich table."""
+class WorktreeDetailPanel(Static):
+    """Displays details about the currently highlighted worktree.
 
-    _PLACEHOLDER = "Select a worktree to view details."
+    Uses Static.update() so that content changes trigger proper re-layout
+    (Widget.render() + refresh() doesn't re-layout in Textual 8.x).
+    """
+
+    _PLACEHOLDER = "[dim]Select a worktree to view details.[/dim]"
 
     def __init__(self) -> None:
-        super().__init__()
+        super().__init__(self._PLACEHOLDER)
         self._current_branch: str | None = None
         self._current_wt: WorktreeInfo | None = None
         self._pr_cache: dict[str, str | None] = {}
         self._pr_pending: set[str] = set()
         self._rows: dict[str, str] = {}
-
-    def get_content_height(self, container: Size, viewport: Size, width: int) -> int:
-        if not self._rows:
-            return 1
-        return len(self._rows)
-
-    def render(self) -> RenderableType:
-        if not self._rows:
-            return Text(self._PLACEHOLDER, style="dim")
-        table = Table(show_header=False, box=None, padding=(0, 1, 0, 0), expand=True)
-        table.add_column("label", style="dim", no_wrap=True, width=8)
-        table.add_column("value")
-        for label, value in self._rows.items():
-            table.add_row(label, value)
-        return table
 
     def show_worktree(self, wt: WorktreeInfo | None) -> None:
         """Update the panel to show details for the given worktree."""
@@ -118,7 +103,7 @@ class WorktreeDetailPanel(Widget):
         if wt is None:
             self._current_branch = None
             self._rows = {}
-            self.refresh()
+            self.update(self._PLACEHOLDER)
             return
         self._current_branch = wt.branch
         self._rebuild_rows()
@@ -146,7 +131,8 @@ class WorktreeDetailPanel(Widget):
         elif wt.branch in self._pr_pending:
             rows["PR"] = "[dim]Looking up…[/dim]"
         self._rows = rows
-        self.refresh()
+        lines = [f"[dim]{label:8s}[/dim] {value}" for label, value in rows.items()]
+        self.update("\n".join(lines))
 
     def mark_pr_pending(self, branch: str) -> None:
         """Mark a PR lookup as in-flight."""

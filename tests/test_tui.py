@@ -5,10 +5,6 @@ from __future__ import annotations
 from datetime import datetime
 from pathlib import Path
 
-from rich.table import Table
-from rich.text import Text
-from textual.geometry import Size
-
 from bouquet.models import WorktreeInfo, WorktreeStatus
 from bouquet.tui.app import OrchestratorApp, _detect_accept_key, _extract_response
 from bouquet.tui.screens import NewWorktreeScreen, SendPromptScreen
@@ -134,16 +130,14 @@ def test_detail_panel_pr_pending() -> None:
     assert "Looking up" in panel._rows["PR"]
 
 
-def test_detail_panel_render_placeholder() -> None:
-    """render() returns dim Text placeholder when no worktree selected."""
+def test_detail_panel_initial_content() -> None:
+    """Panel starts with placeholder text."""
     panel = WorktreeDetailPanel()
-    result = panel.render()
-    assert isinstance(result, Text)
-    assert "Select a worktree" in result.plain
+    assert panel._rows == {}
 
 
-def test_detail_panel_render_table() -> None:
-    """render() returns a Rich Table when a worktree is shown."""
+def test_detail_panel_rows_contain_all_fields() -> None:
+    """Showing a worktree populates all expected rows."""
     panel = WorktreeDetailPanel()
     wt = WorktreeInfo(
         branch="feature/x",
@@ -152,8 +146,9 @@ def test_detail_panel_render_table() -> None:
         created_at=datetime(2026, 1, 1, 12, 0),
     )
     panel.show_worktree(wt)
-    result = panel.render()
-    assert isinstance(result, Table)
+    assert "feature/x" in panel._rows["Branch"]
+    assert "idle" in panel._rows["Status"]
+    assert "off" in panel._rows["Accept"]
 
 
 def test_detail_panel_set_pr_url_other_branch() -> None:
@@ -282,25 +277,21 @@ def test_detect_accept_key_handles_cursor_on_option_2() -> None:
     assert _detect_accept_key(content) == "2"
 
 
-def test_detail_panel_content_height_empty() -> None:
-    """get_content_height returns 1 when no worktree is shown."""
-    panel = WorktreeDetailPanel()
-    assert panel.get_content_height(Size(80, 24), Size(80, 24), 80) == 1
-
-
-def test_detail_panel_content_height_with_rows() -> None:
-    """get_content_height returns the number of rows when a worktree is shown."""
+def test_detail_panel_has_all_labels() -> None:
+    """All expected labels appear as row keys."""
     panel = WorktreeDetailPanel()
     wt = WorktreeInfo(
         branch="feature/x",
         path=Path("/tmp/wt"),
-        status=WorktreeStatus.ACTIVE,
+        tmux_window_id="@5",
+        status=WorktreeStatus.RUNNING,
         created_at=datetime(2026, 3, 18, 10, 0),
+        agent_profile="claude",
+        auto_accept=True,
     )
     panel.show_worktree(wt)
-    height = panel.get_content_height(Size(80, 24), Size(80, 24), 80)
-    assert height == len(panel._rows)
-    assert height >= 7  # Branch, Status, Accept, Profile, Window, Path, Created
+    for label in ("Branch", "Status", "Accept", "Profile", "Window", "Path", "Created"):
+        assert label in panel._rows, f"'{label}' missing from detail panel rows"
 
 
 def test_detail_panel_all_statuses_have_style() -> None:
