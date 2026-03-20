@@ -203,7 +203,7 @@ class OrchestratorApp(App):
                     new_status = self._activity_monitor.check(
                         self.session_state.tmux_session_name, wt.tmux_window_id, wt.agent_pane_id
                     )
-                    if new_status != wt.status:
+                    if new_status != wt.status and wt.status in POLLABLE_STATUSES:
                         wt.status = new_status
                         changed = True
                     # Auto-accept: accept prompt when WAITING and auto_accept is on
