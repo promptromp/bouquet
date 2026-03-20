@@ -149,7 +149,8 @@ class OrchestratorApp(App):
             content = self.manager.tmux.capture_pane_by_id(wt.agent_pane_id)
         else:
             content = self.manager.tmux.capture_pane(
-                self.session_state.tmux_session_name, wt.tmux_window_id  # type: ignore[arg-type]
+                self.session_state.tmux_session_name,
+                wt.tmux_window_id,  # type: ignore[arg-type]
             )
 
         key = _detect_accept_key(content)
@@ -159,7 +160,10 @@ class OrchestratorApp(App):
                 self.manager.tmux.send_keys_to_pane(wt.agent_pane_id, key, enter=False)
             else:
                 self.manager.tmux.send_keys_to_window_id(
-                    self.session_state.tmux_session_name, wt.tmux_window_id, key, enter=False  # type: ignore[arg-type]
+                    self.session_state.tmux_session_name,
+                    wt.tmux_window_id,  # type: ignore[arg-type]
+                    key,
+                    enter=False,
                 )
         else:
             # Traditional [Y/n] prompt: send "y" + Enter
@@ -167,7 +171,9 @@ class OrchestratorApp(App):
                 self.manager.tmux.send_keys_to_pane(wt.agent_pane_id, "y")
             else:
                 self.manager.tmux.send_keys_to_window_id(
-                    self.session_state.tmux_session_name, wt.tmux_window_id, "y"  # type: ignore[arg-type]
+                    self.session_state.tmux_session_name,
+                    wt.tmux_window_id,  # type: ignore[arg-type]
+                    "y",
                 )
 
     # --- Activity polling ---
