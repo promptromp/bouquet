@@ -20,6 +20,9 @@ def mock_tmux() -> MagicMock:
     tmux = MagicMock()
     mock_window = MagicMock()
     mock_window.window_id = "@1"
+    mock_pane = MagicMock()
+    mock_pane.pane_id = "%1"
+    mock_window.active_pane = mock_pane
     tmux.create_window.return_value = mock_window
     return tmux
 
@@ -63,12 +66,13 @@ def test_create_worktree(manager: WorktreeManager) -> None:
     assert info.status == WorktreeStatus.ACTIVE
     assert info.path.exists()
     assert info.tmux_window_id == "@1"
+    assert info.agent_pane_id == "%1"
 
-    # Verify tmux interactions — uses window-ID-based send_keys
+    # Verify tmux interactions — uses pane-ID-based send_keys when agent_pane_id is set
     mock_tmux = manager.tmux
     assert isinstance(mock_tmux, MagicMock)
     mock_tmux.create_window.assert_called_once()
-    mock_tmux.send_keys_to_window_id.assert_called_once()
+    mock_tmux.send_keys_to_pane.assert_called_once()
 
 
 def test_remove_worktree(manager: WorktreeManager) -> None:
@@ -103,6 +107,7 @@ def test_adopt_existing(manager: WorktreeManager, tmp_git_repo: Path) -> None:
     assert adopted[0].branch == "feature/manual"
     assert adopted[0].status == WorktreeStatus.ACTIVE
     assert adopted[0].tmux_window_id == "@1"
+    assert adopted[0].agent_pane_id == "%1"
 
     # Should now appear in list_active
     assert len(manager.list_active()) == 1
@@ -110,7 +115,7 @@ def test_adopt_existing(manager: WorktreeManager, tmp_git_repo: Path) -> None:
     # Verify agent was launched in the adopted worktree
     mock_tmux = manager.tmux
     assert isinstance(mock_tmux, MagicMock)
-    mock_tmux.send_keys_to_window_id.assert_called_once()
+    mock_tmux.send_keys_to_pane.assert_called_once()
 
 
 def test_adopt_existing_skips_main_worktree(manager: WorktreeManager) -> None:
@@ -199,6 +204,9 @@ def test_create_with_services(
     tmux = MagicMock()
     mock_window = MagicMock()
     mock_window.window_id = "@1"
+    mock_pane = MagicMock()
+    mock_pane.pane_id = "%1"
+    mock_window.active_pane = mock_pane
     tmux.create_window.return_value = mock_window
 
     state = SessionState(
@@ -262,6 +270,9 @@ def test_create_with_services_uses_default_layout(
     tmux = MagicMock()
     mock_window = MagicMock()
     mock_window.window_id = "@1"
+    mock_pane = MagicMock()
+    mock_pane.pane_id = "%1"
+    mock_window.active_pane = mock_pane
     tmux.create_window.return_value = mock_window
 
     state = SessionState(
@@ -305,6 +316,9 @@ def test_create_with_setup_commands_sets_tmux_env(
     tmux = MagicMock()
     mock_window = MagicMock()
     mock_window.window_id = "@1"
+    mock_pane = MagicMock()
+    mock_pane.pane_id = "%1"
+    mock_window.active_pane = mock_pane
     tmux.create_window.return_value = mock_window
 
     state = SessionState(

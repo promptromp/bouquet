@@ -170,6 +170,76 @@ def test_detail_panel_set_pr_url_other_branch() -> None:
     assert "PR" not in panel._rows
 
 
+def test_auto_accept_defaults_false() -> None:
+    """auto_accept defaults to False on WorktreeInfo."""
+    wt = WorktreeInfo(branch="feature/x", path=Path("/tmp/wt"))
+    assert wt.auto_accept is False
+
+
+def test_auto_accept_json_roundtrip() -> None:
+    """auto_accept=True survives JSON serialization round-trip."""
+    wt = WorktreeInfo(branch="feature/x", path=Path("/tmp/wt"), auto_accept=True)
+    data = wt.model_dump_json()
+    restored = WorktreeInfo.model_validate_json(data)
+    assert restored.auto_accept is True
+
+
+def test_auto_accept_backward_compat() -> None:
+    """Old JSON without auto_accept deserializes with auto_accept=False."""
+    data = '{"branch": "feature/x", "path": "/tmp/wt", "status": "active", "created_at": "2026-03-18T10:00:00"}'
+    wt = WorktreeInfo.model_validate_json(data)
+    assert wt.auto_accept is False
+
+
+def test_agent_pane_id_defaults_none() -> None:
+    """agent_pane_id defaults to None on WorktreeInfo."""
+    wt = WorktreeInfo(branch="feature/x", path=Path("/tmp/wt"))
+    assert wt.agent_pane_id is None
+
+
+def test_agent_pane_id_json_roundtrip() -> None:
+    """agent_pane_id survives JSON serialization round-trip."""
+    wt = WorktreeInfo(branch="feature/x", path=Path("/tmp/wt"), agent_pane_id="%42")
+    data = wt.model_dump_json()
+    restored = WorktreeInfo.model_validate_json(data)
+    assert restored.agent_pane_id == "%42"
+
+
+def test_agent_pane_id_backward_compat() -> None:
+    """Old JSON without agent_pane_id deserializes with agent_pane_id=None."""
+    data = '{"branch": "feature/x", "path": "/tmp/wt", "status": "active", "created_at": "2026-03-18T10:00:00"}'
+    wt = WorktreeInfo.model_validate_json(data)
+    assert wt.agent_pane_id is None
+
+
+def test_detail_panel_auto_accept_on() -> None:
+    """Detail panel shows 'on' for auto_accept=True."""
+    panel = WorktreeDetailPanel()
+    wt = WorktreeInfo(
+        branch="feature/x",
+        path=Path("/tmp/wt"),
+        status=WorktreeStatus.ACTIVE,
+        created_at=datetime(2026, 3, 18, 10, 0),
+        auto_accept=True,
+    )
+    panel.show_worktree(wt)
+    assert "on" in panel._rows["Accept"]
+
+
+def test_detail_panel_auto_accept_off() -> None:
+    """Detail panel shows 'off' for auto_accept=False."""
+    panel = WorktreeDetailPanel()
+    wt = WorktreeInfo(
+        branch="feature/x",
+        path=Path("/tmp/wt"),
+        status=WorktreeStatus.ACTIVE,
+        created_at=datetime(2026, 3, 18, 10, 0),
+        auto_accept=False,
+    )
+    panel.show_worktree(wt)
+    assert "off" in panel._rows["Accept"]
+
+
 def test_detail_panel_all_statuses_have_style() -> None:
     """Every WorktreeStatus has an entry in both _STATUS_LABEL and _STATUS_STYLE."""
     for status in WorktreeStatus:

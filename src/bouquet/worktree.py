@@ -84,7 +84,7 @@ class WorktreeManager:
             for key, value in env_delta.items():
                 self.tmux.set_session_environment(self.session_name, key, value)
 
-        # 3. Create tmux window
+        # 3. Create tmux window and capture agent pane ID before service splits
         win_name = self._window_name(info.branch)
         window = self.tmux.create_window(
             session_name=self.session_name,
@@ -92,6 +92,8 @@ class WorktreeManager:
             start_directory=wt_path,
         )
         info.tmux_window_id = window.window_id
+        agent_pane = window.active_pane
+        info.agent_pane_id = agent_pane.pane_id if agent_pane else None
         info.status = WorktreeStatus.ACTIVE
 
         # 4. Set up service panes (if any)
@@ -106,17 +108,20 @@ class WorktreeManager:
                 layout=self.settings.tmux.layout,
             )
 
-        # 5. Launch agent command in pane 0
+        # 5. Launch agent command in the agent pane
         profile = self.settings.agent.resolve_profile(info.agent_profile)
         agent_cmd = profile.command
         if profile.args:
             agent_cmd += " " + " ".join(profile.args)
-        assert info.tmux_window_id is not None  # set above from window.window_id
-        self.tmux.send_keys_to_window_id(
-            session_name=self.session_name,
-            window_id=info.tmux_window_id,
-            keys=agent_cmd,
-        )
+        if info.agent_pane_id:
+            self.tmux.send_keys_to_pane(info.agent_pane_id, agent_cmd)
+        else:
+            assert info.tmux_window_id is not None
+            self.tmux.send_keys_to_window_id(
+                session_name=self.session_name,
+                window_id=info.tmux_window_id,
+                keys=agent_cmd,
+            )
 
     def create(
         self,

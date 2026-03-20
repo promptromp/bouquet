@@ -46,10 +46,13 @@ class ActivityMonitor:
         self._hashes: dict[str, str] = {}
         self._stable_count: dict[str, int] = {}
 
-    def check(self, session_name: str, window_id: str) -> WorktreeStatus:
+    def check(self, session_name: str, window_id: str, agent_pane_id: str | None = None) -> WorktreeStatus:
         """Check a single pane and return the inferred status."""
         try:
-            content = self._tmux.capture_pane(session_name, window_id)
+            if agent_pane_id:
+                content = self._tmux.capture_pane_by_id(agent_pane_id)
+            else:
+                content = self._tmux.capture_pane(session_name, window_id)
         except Exception:
             return WorktreeStatus.ERROR
 
