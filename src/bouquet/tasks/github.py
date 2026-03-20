@@ -9,7 +9,7 @@ import subprocess
 from datetime import datetime
 
 from bouquet.github import GitHubError, gh_available
-from bouquet.tasks.base import Task, TaskQueueBackend, TaskStatus
+from bouquet.tasks.base import Task, TaskBackendError, TaskQueueBackend, TaskStatus
 
 
 _BRANCH_MARKER = re.compile(r"<!-- bouquet:branch:(.+?) -->")
@@ -153,7 +153,7 @@ class GitHubIssuesBackend(TaskQueueBackend):
 
         task = self.get_task(task_id)
         if task is None:
-            raise ValueError(f"Task {task_id} not found after update")
+            raise TaskBackendError(f"Task {task_id} not found after update")
         return task
 
     def delete_task(self, task_id: str) -> None:

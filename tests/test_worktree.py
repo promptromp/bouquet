@@ -13,7 +13,7 @@ from bouquet.git import create_worktree as git_create_worktree
 from bouquet.models import SessionState, WorktreeStatus
 from bouquet.tasks.base import Task, TaskStatus
 from bouquet.tasks.local import LocalBackend
-from bouquet.worktree import WorktreeManager
+from bouquet.worktree import WorktreeManager, sanitize_branch_name
 
 
 @pytest.fixture
@@ -501,3 +501,25 @@ def test_build_task_prompt_no_description() -> None:
     task = Task(id="1", title="Quick fix")
     prompt = WorktreeManager._build_task_prompt(task)
     assert prompt == "Task: Quick fix"
+
+
+# --- sanitize_branch_name ---
+
+
+def test_sanitize_branch_name_basic() -> None:
+    assert sanitize_branch_name("Fix login page") == "fix-login-page"
+
+
+def test_sanitize_branch_name_special_chars() -> None:
+    assert sanitize_branch_name("Fix: the bug! (urgent)") == "fix-the-bug-urgent"
+
+
+def test_sanitize_branch_name_truncates() -> None:
+    long_title = "a" * 60
+    result = sanitize_branch_name(long_title)
+    assert len(result) <= 40
+
+
+def test_sanitize_branch_name_strips_trailing_dashes() -> None:
+    result = sanitize_branch_name("fix---")
+    assert not result.endswith("-")

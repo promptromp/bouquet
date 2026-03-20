@@ -6,7 +6,7 @@ import json
 import sqlite3
 from datetime import datetime
 
-from bouquet.tasks.base import Task, TaskQueueBackend, TaskStatus
+from bouquet.tasks.base import Task, TaskBackendError, TaskQueueBackend, TaskStatus
 
 
 class LocalBackend(TaskQueueBackend):
@@ -83,7 +83,7 @@ class LocalBackend(TaskQueueBackend):
         self._conn.commit()
         task = self.get_task(task_id)
         if task is None:
-            raise ValueError(f"Task {task_id} not found")
+            raise TaskBackendError(f"Task {task_id} not found")
         return task
 
     def delete_task(self, task_id: str) -> None:

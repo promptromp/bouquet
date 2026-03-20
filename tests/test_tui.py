@@ -8,8 +8,19 @@ from unittest.mock import MagicMock
 
 from bouquet.models import SessionState, WorktreeInfo, WorktreeStatus
 from bouquet.tasks.base import Task, TaskStatus
-from bouquet.tui.app import OrchestratorApp, _detect_accept_key, _extract_response
-from bouquet.tui.screens import CreateTaskScreen, NewWorktreeScreen, SendPromptScreen
+from bouquet.tui.app import (
+    _STATUS_PROMPT,
+    _WORKTREE_BRANCH_COL,
+    OrchestratorApp,
+    _detect_accept_key,
+    _extract_response,
+)
+from bouquet.tui.screens import (
+    CompleteTaskScreen,
+    CreateTaskScreen,
+    NewWorktreeScreen,
+    SendPromptScreen,
+)
 from bouquet.tui.widgets import (
     _STATUS_LABEL,
     _STATUS_STYLE,
@@ -388,3 +399,88 @@ def test_reconcile_builds_correct_active_branches() -> None:
     ]
     active_branches = {wt.branch for wt in worktrees}
     assert active_branches == {"task/1-fix-bug", "feature/auth"}
+
+
+# --- Constants tests ---
+
+
+def test_worktree_branch_col_constant() -> None:
+    """The branch column constant should match the table layout."""
+    assert _WORKTREE_BRANCH_COL == 1
+
+
+def test_status_prompt_is_nonempty() -> None:
+    """Status prompt constant should be a non-empty string."""
+    assert isinstance(_STATUS_PROMPT, str)
+    assert len(_STATUS_PROMPT) > 20
+
+
+# --- Screen tests ---
+
+
+def test_complete_task_screen_with_branch() -> None:
+    """CompleteTaskScreen with a branch should show remove option."""
+    screen = CompleteTaskScreen("Fix bug", branch="feature/fix")
+    assert screen._task_title == "Fix bug"
+    assert screen._branch == "feature/fix"
+
+
+def test_complete_task_screen_without_branch() -> None:
+    """CompleteTaskScreen without a branch has no branch context."""
+    screen = CompleteTaskScreen("Fix bug", branch=None)
+    assert screen._branch is None
+
+
+def test_create_task_screen_instantiation() -> None:
+    """CreateTaskScreen should instantiate without errors."""
+    screen = CreateTaskScreen()
+    assert screen is not None
+
+
+def test_send_prompt_screen_with_branch() -> None:
+    """SendPromptScreen should capture selected branch."""
+    screen = SendPromptScreen(selected_branch="feature/auth", default_send_all=True)
+    assert screen._selected_branch == "feature/auth"
+    assert screen._default_send_all is True
+
+
+def test_send_prompt_screen_defaults() -> None:
+    """SendPromptScreen defaults."""
+    screen = SendPromptScreen()
+    assert screen._selected_branch is None
+    assert screen._default_send_all is False
+
+
+def test_new_worktree_screen_with_profiles() -> None:
+    """NewWorktreeScreen should accept profile names."""
+    screen = NewWorktreeScreen(default_base="main", profile_names=["claude", "aider"])
+    assert screen._default_base == "main"
+    assert screen._profile_names == ["claude", "aider"]
+
+
+def test_new_worktree_screen_default_profiles() -> None:
+    """NewWorktreeScreen with no profiles."""
+    screen = NewWorktreeScreen()
+    assert screen._profile_names == []
+
+
+# --- __all__ exports ---
+
+
+def test_widgets_all_exports() -> None:
+    """widgets.__all__ should export the public widget classes."""
+    from bouquet.tui import widgets  # noqa: PLC0415
+
+    assert hasattr(widgets, "__all__")
+    for name in ["ProjectHeader", "TaskQueueTable", "WorktreeDetailPanel", "WorktreeTable"]:
+        assert name in widgets.__all__
+
+
+def test_screens_all_exports() -> None:
+    """screens.__all__ should export the public screen classes."""
+    from bouquet.tui import screens  # noqa: PLC0415
+
+    assert hasattr(screens, "__all__")
+    expected = ["ConfirmQuitScreen", "NewWorktreeScreen", "CreateTaskScreen", "CompleteTaskScreen", "SendPromptScreen"]
+    for name in expected:
+        assert name in screens.__all__

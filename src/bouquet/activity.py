@@ -9,6 +9,8 @@ from bouquet.models import WorktreeStatus
 from bouquet.tmux import TmuxManager
 
 
+_PROMPT_SCAN_LINES = 10  # number of trailing lines to scan for prompts
+
 # Patterns that indicate an agent is waiting for user input.
 _PROMPT_PATTERNS = [
     re.compile(r"\[Y/n\]", re.IGNORECASE),
@@ -81,7 +83,7 @@ class ActivityMonitor:
     @staticmethod
     def _has_permission_prompt(content: str) -> bool:
         """Return True if the last few lines contain a known permission prompt."""
-        last_lines = "\n".join(content.splitlines()[-10:])
+        last_lines = "\n".join(content.splitlines()[-_PROMPT_SCAN_LINES:])
         return any(p.search(last_lines) for p in _PROMPT_PATTERNS)
 
     def remove(self, window_id: str) -> None:

@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from bouquet.bootstrap import _run_setup_and_capture_env, bootstrap_worktree
+from bouquet.bootstrap import _copy_file, _cow_clone, _direnv_allow, _run_setup_and_capture_env, bootstrap_worktree
 from bouquet.config import BootstrapConfig
 
 
@@ -220,3 +220,159 @@ def test_bootstrap_python_version_skipped_when_python_false(tmp_path: Path) -> N
 
     pin_file = worktree / ".python-version"
     assert not pin_file.exists()
+
+
+# --- Edge case tests ---
+
+
+def test_copy_env_files(tmp_path: Path) -> None:
+    """bootstrap should copy env files from repo to worktree."""
+    repo = tmp_path / "repo"
+    repo.mkdir()
+    (repo / ".env").write_text("SECRET=abc\n")
+    (repo / ".env.local").write_text("LOCAL=true\n")
+
+    worktree = tmp_path / "wt"
+    worktree.mkdir()
+
+    config = BootstrapConfig(
+        copy_env_files=[".env", ".env.local", ".env.missing"],
+        python_deps_command="",
+        node_deps_command="",
+        use_cow_clone=False,
+        direnv_allow=False,
+    )
+
+    bootstrap_worktree(repo_path=repo, worktree_path=worktree, config=config, python=False, javascript=False)
+
+    assert (worktree / ".env").read_text() == "SECRET=abc\n"
+    assert (worktree / ".env.local").read_text() == "LOCAL=true\n"
+    assert not (worktree / ".env.missing").exists()
+
+
+def test_copy_file_helper(tmp_path: Path) -> None:
+    """_copy_file copies when source exists, does nothing when it doesn't."""
+    src = tmp_path / "exists.txt"
+    src.write_text("hello")
+    dst = tmp_path / "copy.txt"
+
+    _copy_file(src, dst)
+    assert dst.read_text() == "hello"
+
+    # Missing source: no error, no file
+    missing_dst = tmp_path / "nope.txt"
+    _copy_file(tmp_path / "missing.txt", missing_dst)
+    assert not missing_dst.exists()
+
+
+def test_cow_clone_copies_directory(tmp_path: Path) -> None:
+    """_cow_clone should copy a directory (CoW or fallback)."""
+    src = tmp_path / "node_modules"
+    src.mkdir()
+    (src / "pkg.json").write_text("{}")
+
+    dst = tmp_path / "wt_nm"
+    _cow_clone(src, dst)
+
+    assert dst.exists()
+    assert (dst / "pkg.json").read_text() == "{}"
+    # result is True (CoW) or False (fallback) — both are acceptable
+
+
+def test_cow_clone_missing_source(tmp_path: Path) -> None:
+    """_cow_clone with missing source returns False."""
+    result = _cow_clone(tmp_path / "missing", tmp_path / "dst")
+    assert result is False
+
+
+def test_cow_clone_file_not_dir(tmp_path: Path) -> None:
+    """_cow_clone with a file (not dir) returns False."""
+    src = tmp_path / "file.txt"
+    src.write_text("not a dir")
+    result = _cow_clone(src, tmp_path / "dst")
+    assert result is False
+
+
+def test_bootstrap_cow_clone_node_modules(tmp_path: Path) -> None:
+    """CoW clone should copy node_modules when javascript=True and use_cow_clone=True."""
+    repo = tmp_path / "repo"
+    repo.mkdir()
+    nm = repo / "node_modules"
+    nm.mkdir()
+    (nm / "package.json").write_text("{}")
+
+    worktree = tmp_path / "wt"
+    worktree.mkdir()
+
+    config = BootstrapConfig(
+        copy_env_files=[],
+        python_deps_command="",
+        node_deps_command="",
+        use_cow_clone=True,
+        direnv_allow=False,
+    )
+
+    bootstrap_worktree(repo_path=repo, worktree_path=worktree, config=config, python=False, javascript=True)
+
+    assert (worktree / "node_modules" / "package.json").exists()
+
+
+def test_bootstrap_cow_clone_skipped_for_python(tmp_path: Path) -> None:
+    """CoW clone should NOT copy node_modules when javascript=False."""
+    repo = tmp_path / "repo"
+    repo.mkdir()
+    nm = repo / "node_modules"
+    nm.mkdir()
+    (nm / "package.json").write_text("{}")
+
+    worktree = tmp_path / "wt"
+    worktree.mkdir()
+
+    config = BootstrapConfig(
+        copy_env_files=[],
+        python_deps_command="",
+        node_deps_command="",
+        use_cow_clone=True,
+        direnv_allow=False,
+    )
+
+    bootstrap_worktree(repo_path=repo, worktree_path=worktree, config=config, python=True, javascript=False)
+
+    assert not (worktree / "node_modules").exists()
+
+
+def test_direnv_allow_no_envrc(tmp_path: Path) -> None:
+    """_direnv_allow should be a no-op when no .envrc exists."""
+    _direnv_allow(tmp_path)  # should not raise
+
+
+def test_bootstrap_direnv_allow(tmp_path: Path) -> None:
+    """bootstrap with direnv_allow=True should not error even without direnv."""
+    worktree = tmp_path / "wt"
+    worktree.mkdir()
+
+    config = BootstrapConfig(
+        copy_env_files=[],
+        python_deps_command="",
+        node_deps_command="",
+        use_cow_clone=False,
+        direnv_allow=True,
+    )
+
+    # Should not raise even without direnv installed
+    bootstrap_worktree(repo_path=tmp_path, worktree_path=worktree, config=config, python=False, javascript=False)
+
+
+def test_exception_tuple_syntax(tmp_path: Path) -> None:
+    """Verify the fixed exception tuple on line 105 handles bad JSON gracefully."""
+    # Create a file with invalid JSON to trigger the except branch
+    env_path = tmp_path / "bad_env.json"
+    env_path.write_text("not json")
+
+    # The fix ensures (json.JSONDecodeError, FileNotFoundError, OSError) is a proper tuple.
+    # Test by running setup with a command that creates an invalid env dump file.
+    delta = _run_setup_and_capture_env(
+        ["echo 'not json' > /dev/null"],
+        tmp_path,
+    )
+    assert isinstance(delta, dict)

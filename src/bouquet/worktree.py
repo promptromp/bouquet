@@ -17,6 +17,16 @@ from bouquet.template import render_template
 from bouquet.tmux import TmuxManager
 
 
+_AGENT_STARTUP_DELAY = 3  # seconds to wait for agent process to initialize
+_BRANCH_SANITIZE_PATTERN = re.compile(r"[^a-z0-9]+")
+_BRANCH_MAX_LENGTH = 40
+
+
+def sanitize_branch_name(title: str) -> str:
+    """Sanitize a title into a valid branch name component."""
+    return _BRANCH_SANITIZE_PATTERN.sub("-", title.lower())[:_BRANCH_MAX_LENGTH].strip("-")
+
+
 class WorktreeManager:
     """High-level orchestrator for creating/removing worktree-backed tmux windows."""
 
@@ -268,7 +278,7 @@ class WorktreeManager:
     ) -> WorktreeInfo:
         """Pick up a task: create a worktree, mark it in-progress, and send the prompt."""
         # Generate branch name
-        sanitized = re.sub(r"[^a-z0-9]+", "-", task.title.lower())[:40].strip("-")
+        sanitized = sanitize_branch_name(task.title)
         branch = f"{auto_branch_prefix}{task.id}-{sanitized}"
 
         # Mark task in-progress
@@ -280,7 +290,7 @@ class WorktreeManager:
         self.state.save()
 
         # Wait for agent to start, then send the task prompt
-        time.sleep(3)
+        time.sleep(_AGENT_STARTUP_DELAY)
         prompt = self._build_task_prompt(task)
         if info.agent_pane_id:
             self.tmux.send_keys_to_pane(info.agent_pane_id, prompt)

@@ -34,11 +34,22 @@ from bouquet.tui.screens import (
     SendPromptScreen,
 )
 from bouquet.tui.widgets import ProjectHeader, TaskQueueTable, WorktreeDetailPanel, WorktreeTable
-from bouquet.worktree import WorktreeManager
+from bouquet.worktree import WorktreeManager, sanitize_branch_name
 
 
 _RE_AUTO_ACCEPT = re.compile(r"^\s*[❯ ]\s*(\d+)\.\s*Yes,?\s+and\s+don't\s+ask\s+again", re.MULTILINE)
 _RE_YES = re.compile(r"^\s*[❯ ]\s*(\d+)\.\s*Yes\s*$", re.MULTILINE)
+
+_WORKTREE_BRANCH_COL = 1
+_POLL_INTERVAL_SECONDS = 2.0
+_STATUS_POLL_MAX_WAIT = 120
+_STATUS_POLL_STABILITY_THRESHOLD = 3
+_STATUS_POLL_INITIAL_DELAY = 3
+_STATUS_POLL_INTERVAL = 2
+_STATUS_PROMPT = (
+    "Briefly summarize your current progress and state in 2-3 sentences. "
+    "What are you working on, what have you done, and what remains?"
+)
 
 
 def _detect_accept_key(content: str) -> str | None:
@@ -131,7 +142,54 @@ class OrchestratorApp(App):
         self.query_one("#tasks-container").border_title = "Task Queue"
         self._refresh_table()
         self._reconcile_tasks()
-        self.set_interval(2.0, self._poll_activity)
+        self.set_interval(_POLL_INTERVAL_SECONDS, self._poll_activity)
+
+    # --- Shared helpers ---
+
+    def _send_keys_to_worktree(self, wt: WorktreeInfo, text: str, enter: bool = True) -> None:
+        """Send keystrokes to a worktree's agent pane (or fallback to window)."""
+        if wt.agent_pane_id:
+            self.manager.tmux.send_keys_to_pane(wt.agent_pane_id, text, enter=enter)
+        elif wt.tmux_window_id:
+            self.manager.tmux.send_keys_to_window_id(
+                self.session_state.tmux_session_name,
+                wt.tmux_window_id,
+                text,
+                enter=enter,
+            )
+
+    def _capture_pane_from_worktree(self, wt: WorktreeInfo) -> str:
+        """Capture the content of a worktree's agent pane (or fallback to window)."""
+        if wt.agent_pane_id:
+            return self.manager.tmux.capture_pane_by_id(wt.agent_pane_id)
+        if wt.tmux_window_id:
+            return self.manager.tmux.capture_pane(self.session_state.tmux_session_name, wt.tmux_window_id)
+        return ""
+
+    def _get_selected_branch(self) -> str | None:
+        """Return the branch name of the currently highlighted worktree row, or None."""
+        table = self.query_one(WorktreeTable)
+        if table.cursor_row is None or table.row_count == 0:
+            return None
+        return str(table.get_row_at(table.cursor_row)[_WORKTREE_BRANCH_COL])
+
+    def _get_selected_task_id(self) -> str | None:
+        """Return the task ID of the currently highlighted task row, or None."""
+        task_table = self.query_one(TaskQueueTable)
+        if task_table.cursor_row is None or task_table.row_count == 0:
+            return None
+        row_key = task_table.coordinate_to_cell_key(Coordinate(task_table.cursor_row, 0)).row_key
+        return str(row_key.value)
+
+    def _cleanup_worktree_monitoring(self, wt: WorktreeInfo) -> None:
+        """Remove activity monitor and auto-accept state for a worktree."""
+        if wt.tmux_window_id:
+            self._activity_monitor.remove(wt.tmux_window_id)
+        guard_key = wt.agent_pane_id or wt.tmux_window_id
+        if guard_key:
+            self._recently_accepted.discard(guard_key)
+
+    # --- Table refresh ---
 
     def _refresh_table(self) -> None:
         table = self.query_one(WorktreeTable)
@@ -156,36 +214,14 @@ class OrchestratorApp(App):
         For Claude Code numbered menus, prefers "Yes, and don't ask again"
         over plain "Yes". Falls back to "y" for traditional [Y/n] prompts.
         """
-        if wt.agent_pane_id:
-            content = self.manager.tmux.capture_pane_by_id(wt.agent_pane_id)
-        else:
-            content = self.manager.tmux.capture_pane(
-                self.session_state.tmux_session_name,
-                wt.tmux_window_id,  # type: ignore[arg-type]
-            )
-
+        content = self._capture_pane_from_worktree(wt)
         key = _detect_accept_key(content)
         if key:
             # Claude Code numbered menu: type the option number (no Enter — the menu accepts on keypress)
-            if wt.agent_pane_id:
-                self.manager.tmux.send_keys_to_pane(wt.agent_pane_id, key, enter=False)
-            else:
-                self.manager.tmux.send_keys_to_window_id(
-                    self.session_state.tmux_session_name,
-                    wt.tmux_window_id,  # type: ignore[arg-type]
-                    key,
-                    enter=False,
-                )
+            self._send_keys_to_worktree(wt, key, enter=False)
         else:
             # Traditional [Y/n] prompt: send "y" + Enter
-            if wt.agent_pane_id:
-                self.manager.tmux.send_keys_to_pane(wt.agent_pane_id, "y")
-            else:
-                self.manager.tmux.send_keys_to_window_id(
-                    self.session_state.tmux_session_name,
-                    wt.tmux_window_id,  # type: ignore[arg-type]
-                    "y",
-                )
+            self._send_keys_to_worktree(wt, "y")
 
     # --- Activity polling ---
 
@@ -273,7 +309,7 @@ class OrchestratorApp(App):
         if event.row_key is None:
             return
         row_data = event.data_table.get_row(event.row_key)
-        branch = str(row_data[1])  # Column 1 is Branch
+        branch = str(row_data[_WORKTREE_BRANCH_COL])
         wt = next((w for w in self.session_state.worktrees if w.branch == branch), None)
         detail = self.query_one(WorktreeDetailPanel)
         detail.show_worktree(wt)
@@ -296,15 +332,13 @@ class OrchestratorApp(App):
         if not isinstance(event.data_table, WorktreeTable):
             return
         row_data = event.data_table.get_row(event.row_key)
-        branch = str(row_data[1])  # Column 1 is Branch
+        branch = str(row_data[_WORKTREE_BRANCH_COL])
         self._switch_to_branch(branch)
 
     def action_switch_worktree(self) -> None:
         """Switch to the tmux window for the currently highlighted worktree."""
-        table = self.query_one(WorktreeTable)
-        if table.cursor_row is not None and table.row_count > 0:
-            row_data = table.get_row_at(table.cursor_row)
-            branch = str(row_data[1])  # Column 1 is Branch
+        branch = self._get_selected_branch()
+        if branch:
             self._switch_to_branch(branch)
 
     def _switch_to_branch(self, branch: str) -> None:
@@ -316,11 +350,9 @@ class OrchestratorApp(App):
 
     def action_toggle_auto_accept(self) -> None:
         """Toggle auto-accept for the currently highlighted worktree."""
-        table = self.query_one(WorktreeTable)
-        if table.cursor_row is None or table.row_count == 0:
+        branch = self._get_selected_branch()
+        if not branch:
             return
-        row_data = table.get_row_at(table.cursor_row)
-        branch = str(row_data[1])  # Column 1 is Branch
         wt = next((w for w in self.session_state.worktrees if w.branch == branch), None)
         if wt is None:
             return
@@ -335,26 +367,23 @@ class OrchestratorApp(App):
 
     def action_delete_worktree(self) -> None:
         """Delete the selected worktree."""
-        table = self.query_one(WorktreeTable)
-        if table.cursor_row is not None and table.row_count > 0:
-            row_data = table.get_row_at(table.cursor_row)
-            branch = str(row_data[1])  # Column 1 is Branch
-            # Show REMOVING status immediately
-            info = next((w for w in self.session_state.worktrees if w.branch == branch), None)
-            if info:
-                info.status = WorktreeStatus.REMOVING
-                self._refresh_table()
-            self._remove_worktree(branch)
+        branch = self._get_selected_branch()
+        if not branch:
+            return
+        # Show REMOVING status immediately
+        info = next((w for w in self.session_state.worktrees if w.branch == branch), None)
+        if info:
+            info.status = WorktreeStatus.REMOVING
+            self._refresh_table()
+        self._remove_worktree(branch)
 
     @work(thread=True)
     def _remove_worktree(self, branch: str) -> None:
         """Remove a worktree in a background thread."""
         # Clean up activity monitor state
         info = next((w for w in self.session_state.worktrees if w.branch == branch), None)
-        if info and info.tmux_window_id:
-            self._activity_monitor.remove(info.tmux_window_id)
-            guard_key = info.agent_pane_id or info.tmux_window_id
-            self._recently_accepted.discard(guard_key)
+        if info:
+            self._cleanup_worktree_monitoring(info)
         try:
             self.manager.remove(branch)
             self.call_from_thread(self._refresh_table)
@@ -382,21 +411,13 @@ class OrchestratorApp(App):
             self.call_from_thread(self.notify, "No active worktrees", severity="warning")
             return
 
-        prompt = (
-            "Briefly summarize your current progress and state in 2-3 sentences. "
-            "What are you working on, what have you done, and what remains?"
-        )
-        session = self.session_state.tmux_session_name
         start = time.monotonic()
 
         # 1. Send prompt to all agents
         sent: list[WorktreeInfo] = []
         for wt in targets:
             try:
-                if wt.agent_pane_id:
-                    self.manager.tmux.send_keys_to_pane(wt.agent_pane_id, prompt)
-                else:
-                    self.manager.tmux.send_keys_to_window_id(session, wt.tmux_window_id, prompt)  # type: ignore[arg-type]
+                self._send_keys_to_worktree(wt, _STATUS_PROMPT)
                 sent.append(wt)
             except Exception:
                 pass
@@ -408,20 +429,15 @@ class OrchestratorApp(App):
         # 2. Poll until all agents stabilize (or timeout)
         hashes: dict[str, str] = {}
         stable_counts: dict[str, int] = {}
-        max_wait = 120
         elapsed = 0
-        stability_threshold = 3
 
-        time.sleep(3)  # initial wait for agents to start responding
+        time.sleep(_STATUS_POLL_INITIAL_DELAY)
 
-        while elapsed < max_wait:
+        while elapsed < _STATUS_POLL_MAX_WAIT:
             all_stable = True
             for wt in sent:
                 try:
-                    if wt.agent_pane_id:
-                        content = self.manager.tmux.capture_pane_by_id(wt.agent_pane_id)
-                    else:
-                        content = self.manager.tmux.capture_pane(session, wt.tmux_window_id)  # type: ignore[arg-type]
+                    content = self._capture_pane_from_worktree(wt)
                 except Exception:
                     continue
                 h = hashlib.sha256(content.encode()).hexdigest()
@@ -432,12 +448,12 @@ class OrchestratorApp(App):
                     all_stable = False
                 else:
                     stable_counts[wt.branch] = stable_counts.get(wt.branch, 0) + 1
-                    if stable_counts[wt.branch] < stability_threshold:
+                    if stable_counts[wt.branch] < _STATUS_POLL_STABILITY_THRESHOLD:
                         all_stable = False
             if all_stable:
                 break
-            time.sleep(2)
-            elapsed += 2
+            time.sleep(_STATUS_POLL_INTERVAL)
+            elapsed += _STATUS_POLL_INTERVAL
 
         duration_ms = int((time.monotonic() - start) * 1000)
 
@@ -445,13 +461,10 @@ class OrchestratorApp(App):
         responses: list[AgentResponse] = []
         for wt in sent:
             try:
-                if wt.agent_pane_id:
-                    content = self.manager.tmux.capture_pane_by_id(wt.agent_pane_id)
-                else:
-                    content = self.manager.tmux.capture_pane(session, wt.tmux_window_id)  # type: ignore[arg-type]
+                content = self._capture_pane_from_worktree(wt)
             except Exception:
                 content = ""
-            response_text = _extract_response(content, prompt)
+            response_text = _extract_response(content, _STATUS_PROMPT)
             responses.append(
                 AgentResponse(
                     worktree_branch=wt.branch,
@@ -469,11 +482,7 @@ class OrchestratorApp(App):
 
     def action_send_prompt(self) -> None:
         """Open a dialog to send a prompt directly into agent terminal(s)."""
-        table = self.query_one(WorktreeTable)
-        selected_branch: str | None = None
-        if table.cursor_row is not None and table.row_count > 0:
-            row_data = table.get_row_at(table.cursor_row)
-            selected_branch = str(row_data[1])  # Column 1 is Branch
+        selected_branch = self._get_selected_branch()
 
         def on_result(result: tuple[str, bool] | None) -> None:
             if result is not None:
@@ -506,14 +515,7 @@ class OrchestratorApp(App):
         errors = 0
         for wt in targets:
             try:
-                if wt.agent_pane_id:
-                    self.manager.tmux.send_keys_to_pane(wt.agent_pane_id, prompt)
-                else:
-                    self.manager.tmux.send_keys_to_window_id(
-                        self.session_state.tmux_session_name,
-                        wt.tmux_window_id,  # type: ignore[arg-type]
-                        prompt,
-                    )
+                self._send_keys_to_worktree(wt, prompt)
             except Exception as e:
                 self.notify(f"Error sending to {wt.branch}: {e}", severity="error")
                 errors += 1
@@ -580,12 +582,10 @@ class OrchestratorApp(App):
 
     def action_pick_up_task(self) -> None:
         """Pick up the highlighted task in the task queue table."""
-        task_table = self.query_one(TaskQueueTable)
-        if task_table.cursor_row is None or task_table.row_count == 0:
+        task_id = self._get_selected_task_id()
+        if not task_id:
             self.notify("No task selected", severity="warning")
             return
-        row_key = task_table.coordinate_to_cell_key(Coordinate(task_table.cursor_row, 0)).row_key
-        task_id = str(row_key.value)
         task = self.task_backend.get_task(task_id)
         if task is None:
             self.notify(f"Task {task_id} not found", severity="error")
@@ -594,7 +594,7 @@ class OrchestratorApp(App):
             self.notify(f"Task is already {task.status.value}", severity="warning")
             return
         # Compute branch name to add a CREATING placeholder immediately
-        sanitized = re.sub(r"[^a-z0-9]+", "-", task.title.lower())[:40].strip("-")
+        sanitized = sanitize_branch_name(task.title)
         branch = f"{self.settings.task_queue.auto_branch_prefix}{task.id}-{sanitized}"
         placeholder = WorktreeInfo(
             branch=branch,
@@ -637,12 +637,10 @@ class OrchestratorApp(App):
 
     def action_complete_task(self) -> None:
         """Mark the highlighted task as done, optionally removing the worktree."""
-        task_table = self.query_one(TaskQueueTable)
-        if task_table.cursor_row is None or task_table.row_count == 0:
+        task_id = self._get_selected_task_id()
+        if not task_id:
             self.notify("No task selected", severity="warning")
             return
-        row_key = task_table.coordinate_to_cell_key(Coordinate(task_table.cursor_row, 0)).row_key
-        task_id = str(row_key.value)
         task = self.task_backend.get_task(task_id)
         if task is None:
             self.notify(f"Task {task_id} not found", severity="error")
@@ -672,13 +670,9 @@ class OrchestratorApp(App):
             self.call_from_thread(self._refresh_tasks)
 
             if remove_worktree and branch:
-                # Clean up activity monitor state
                 info = next((w for w in self.session_state.worktrees if w.branch == branch), None)
-                if info and info.tmux_window_id:
-                    self._activity_monitor.remove(info.tmux_window_id)
-                    guard_key = info.agent_pane_id or info.tmux_window_id
-                    self._recently_accepted.discard(guard_key)
                 if info:
+                    self._cleanup_worktree_monitoring(info)
                     info.status = WorktreeStatus.REMOVING
                     self.call_from_thread(self._refresh_table)
                 self.manager.remove(branch)
@@ -691,12 +685,10 @@ class OrchestratorApp(App):
 
     def action_delete_task(self) -> None:
         """Delete the highlighted task from the task queue."""
-        task_table = self.query_one(TaskQueueTable)
-        if task_table.cursor_row is None or task_table.row_count == 0:
+        task_id = self._get_selected_task_id()
+        if not task_id:
             self.notify("No task selected", severity="warning")
             return
-        row_key = task_table.coordinate_to_cell_key(Coordinate(task_table.cursor_row, 0)).row_key
-        task_id = str(row_key.value)
         self._delete_task_worker(task_id)
 
     @work(thread=True)

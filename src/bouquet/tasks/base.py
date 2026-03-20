@@ -9,6 +9,10 @@ from enum import StrEnum
 from pydantic import BaseModel, Field
 
 
+class TaskBackendError(Exception):
+    """Raised when a task backend operation fails."""
+
+
 class TaskStatus(StrEnum):
     OPEN = "open"
     IN_PROGRESS = "in_progress"

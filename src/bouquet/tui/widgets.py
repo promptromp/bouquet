@@ -2,6 +2,9 @@
 
 from __future__ import annotations
 
+
+__all__ = ["ProjectHeader", "TaskQueueTable", "WorktreeDetailPanel", "WorktreeTable"]
+
 from rich.text import Text
 from textual.widgets import DataTable, Static
 
