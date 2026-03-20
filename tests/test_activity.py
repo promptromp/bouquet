@@ -88,7 +88,31 @@ def test_has_permission_prompt_patterns() -> None:
     assert ActivityMonitor._has_permission_prompt("Allow? [Y/n]")
     assert ActivityMonitor._has_permission_prompt("line1\nline2\nApprove?")
     assert ActivityMonitor._has_permission_prompt("(y/n)")
+    assert ActivityMonitor._has_permission_prompt("This command requires approval")
     assert not ActivityMonitor._has_permission_prompt("normal output")
+
+
+def test_prompt_detection_with_claude_code_menu() -> None:
+    """Real Claude Code permission prompt: 'Do you want to proceed?' is 7+ lines from bottom."""
+    content = "\n".join(
+        [
+            "────────────────────────",
+            " Bash command",
+            "",
+            "   git status",
+            "   Show working tree status",
+            "",
+            " This command requires approval",
+            "",
+            " Do you want to proceed?",
+            " ❯ 1. Yes",
+            "   2. Yes, and don't ask again for: git:*",
+            "   3. No",
+            "",
+            " Esc to cancel · Tab to amend · ctrl+e to explain",
+        ]
+    )
+    assert ActivityMonitor._has_permission_prompt(content)
 
 
 def test_check_uses_pane_id_when_provided() -> None:

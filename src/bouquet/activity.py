@@ -15,6 +15,7 @@ _PROMPT_PATTERNS = [
     re.compile(r"\[y/N\]", re.IGNORECASE),
     re.compile(r"\(y/n\)", re.IGNORECASE),
     re.compile(r"Do you want to proceed\?", re.IGNORECASE),
+    re.compile(r"This command requires approval", re.IGNORECASE),
     re.compile(r"Allow\?", re.IGNORECASE),
     re.compile(r"Approve\?", re.IGNORECASE),
 ]
@@ -80,7 +81,7 @@ class ActivityMonitor:
     @staticmethod
     def _has_permission_prompt(content: str) -> bool:
         """Return True if the last few lines contain a known permission prompt."""
-        last_lines = "\n".join(content.splitlines()[-5:])
+        last_lines = "\n".join(content.splitlines()[-10:])
         return any(p.search(last_lines) for p in _PROMPT_PATTERNS)
 
     def remove(self, window_id: str) -> None:
