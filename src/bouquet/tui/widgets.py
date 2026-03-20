@@ -68,6 +68,9 @@ class WorktreeTable(DataTable):
             created = wt.created_at.strftime("%m-%d %H:%M")
             window_id = wt.tmux_window_id or "-"
             status = self._STATUS_DISPLAY.get(wt.status, Text(wt.status.value))
+            if wt.auto_accept:
+                status = status.copy()
+                status.append(" [A]", style="bold cyan")
             profile = wt.agent_profile or "-"
             self.add_row(
                 str(i),
@@ -124,6 +127,7 @@ class WorktreeDetailPanel(Widget):
         rows: dict[str, str] = {
             "Branch": wt.branch,
             "Status": f"[{status_style}]{status_label}[/{status_style}]" if status_style else status_label,
+            "Accept": "[green]on[/green]" if wt.auto_accept else "[dim]off[/dim]",
             "Profile": wt.agent_profile or "default",
             "Window": wt.tmux_window_id or "-",
             "Path": str(wt.path),

@@ -54,7 +54,7 @@ class ConfirmQuitScreen(ModalScreen[bool]):
         self.dismiss(event.button.id == "confirm-quit-btn")
 
 
-class NewWorktreeScreen(ModalScreen[tuple[str, str, str | None] | None]):
+class NewWorktreeScreen(ModalScreen[tuple[str, str, str | None, bool] | None]):
     """Modal dialog for creating a new worktree."""
 
     CSS = """
@@ -80,6 +80,20 @@ class NewWorktreeScreen(ModalScreen[tuple[str, str, str | None] | None]):
 
     #dialog Select {
         margin-bottom: 1;
+    }
+
+    .toggle-row {
+        height: auto;
+        margin-bottom: 1;
+    }
+
+    .toggle-row Switch {
+        margin-right: 1;
+    }
+
+    .toggle-row .toggle-label {
+        margin-top: 1;
+        margin-bottom: 0;
     }
 
     .button-row {
@@ -112,6 +126,9 @@ class NewWorktreeScreen(ModalScreen[tuple[str, str, str | None] | None]):
                     value=self._profile_names[0],
                     id="profile-select",
                 )
+            with Horizontal(classes="toggle-row"):
+                yield Switch(value=False, id="auto-accept-switch")
+                yield Label("Auto-accept prompts", classes="toggle-label")
             with Vertical(classes="button-row"):
                 yield Button("Create", variant="primary", id="create-btn")
                 yield Button("Cancel", variant="default", id="cancel-btn")
@@ -126,8 +143,9 @@ class NewWorktreeScreen(ModalScreen[tuple[str, str, str | None] | None]):
             if self._profile_names:
                 select = self.query_one("#profile-select", Select)
                 profile = str(select.value) if select.value != Select.BLANK else None
+            auto_accept = self.query_one("#auto-accept-switch", Switch).value
             if branch:
-                self.dismiss((branch, base, profile))
+                self.dismiss((branch, base, profile, auto_accept))
             else:
                 branch_input.focus()
         else:

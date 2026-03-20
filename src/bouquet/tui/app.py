@@ -56,6 +56,7 @@ class OrchestratorApp(App):
         Binding("n", "new_worktree", "New worktree"),
         Binding("s", "switch_worktree", "Switch to window"),
         Binding("d", "delete_worktree", "Delete worktree"),
+        Binding("a", "toggle_auto_accept", "Auto-accept"),
         Binding("p", "send_prompt", "Send prompt"),
         Binding("t", "status", "Status"),
         Binding("r", "refresh", "Refresh"),
@@ -75,6 +76,7 @@ class OrchestratorApp(App):
         self._activity_monitor = ActivityMonitor(manager.tmux)
         self._polling = False
         self._send_to_all = False
+        self._recently_accepted: set[str] = set()
 
     def compose(self) -> ComposeResult:
         yield ProjectHeader(self.settings.project.name)
@@ -135,6 +137,21 @@ class OrchestratorApp(App):
                     if new_status != wt.status:
                         wt.status = new_status
                         changed = True
+                    # Auto-accept: send "y" when WAITING and auto_accept is on
+                    if (
+                        new_status == WorktreeStatus.WAITING
+                        and wt.auto_accept
+                        and wt.tmux_window_id not in self._recently_accepted
+                    ):
+                        try:
+                            self.manager.tmux.send_keys_to_window_id(
+                                self.session_state.tmux_session_name, wt.tmux_window_id, "y"
+                            )
+                            self._recently_accepted.add(wt.tmux_window_id)
+                        except Exception:
+                            pass
+                    elif new_status != WorktreeStatus.WAITING and wt.tmux_window_id in self._recently_accepted:
+                        self._recently_accepted.discard(wt.tmux_window_id)
             if changed:
                 self.call_from_thread(self._refresh_table)
         finally:
@@ -147,14 +164,15 @@ class OrchestratorApp(App):
         base = self.settings.project.base_branch
         profile_names = [p.name for p in self.settings.agent.profiles]
 
-        def on_result(result: tuple[str, str, str | None] | None) -> None:
+        def on_result(result: tuple[str, str, str | None, bool] | None) -> None:
             if result is not None:
-                branch, base_branch, profile = result
+                branch, base_branch, profile, auto_accept = result
                 # Add a CREATING placeholder immediately so the user sees feedback
                 placeholder = WorktreeInfo(
                     branch=branch,
                     path=Path("."),
                     status=WorktreeStatus.CREATING,
+                    auto_accept=auto_accept,
                 )
                 self.session_state.worktrees.append(placeholder)
                 self._refresh_table()
@@ -222,6 +240,24 @@ class OrchestratorApp(App):
         except Exception as e:
             self.notify(f"Error switching: {e}", severity="error")
 
+    def action_toggle_auto_accept(self) -> None:
+        """Toggle auto-accept for the currently highlighted worktree."""
+        table = self.query_one(WorktreeTable)
+        if table.cursor_row is None or table.row_count == 0:
+            return
+        row_data = table.get_row_at(table.cursor_row)
+        branch = str(row_data[1])  # Column 1 is Branch
+        wt = next((w for w in self.session_state.worktrees if w.branch == branch), None)
+        if wt is None:
+            return
+        wt.auto_accept = not wt.auto_accept
+        if not wt.auto_accept and wt.tmux_window_id:
+            self._recently_accepted.discard(wt.tmux_window_id)
+        self.session_state.save()
+        self._refresh_table()
+        state = "on" if wt.auto_accept else "off"
+        self.notify(f"Auto-accept {state} for {branch}")
+
     def action_delete_worktree(self) -> None:
         """Delete the selected worktree."""
         table = self.query_one(WorktreeTable)
@@ -242,6 +278,7 @@ class OrchestratorApp(App):
         info = next((w for w in self.session_state.worktrees if w.branch == branch), None)
         if info and info.tmux_window_id:
             self._activity_monitor.remove(info.tmux_window_id)
+            self._recently_accepted.discard(info.tmux_window_id)
         try:
             self.manager.remove(branch)
             self.call_from_thread(self._refresh_table)

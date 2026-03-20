@@ -28,6 +28,7 @@ class WorktreeInfo(BaseModel):
     created_at: datetime = Field(default_factory=datetime.now)
     index: int = 0
     agent_profile: str | None = None
+    auto_accept: bool = False
 
 
 class SessionState(BaseModel):
