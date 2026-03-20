@@ -6,6 +6,7 @@ from rich.console import RenderableType
 from rich.table import Table
 from rich.text import Text
 from textual.app import ComposeResult
+from textual.geometry import Size
 from textual.widget import Widget
 from textual.widgets import DataTable, Static, TabbedContent, TabPane
 
@@ -95,6 +96,11 @@ class WorktreeDetailPanel(Widget):
         self._pr_cache: dict[str, str | None] = {}
         self._pr_pending: set[str] = set()
         self._rows: dict[str, str] = {}
+
+    def get_content_height(self, container: Size, viewport: Size, width: int) -> int:
+        if not self._rows:
+            return 1
+        return len(self._rows)
 
     def render(self) -> RenderableType:
         if not self._rows:
