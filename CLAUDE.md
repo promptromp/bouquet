@@ -31,6 +31,7 @@ CLI (Click) → bouquet start/stop/init (args optional, infers from cwd + .bouqu
        ├─► bootstrap.py   setup commands + env capture, env file copy, CoW clone, dep install
        ├─► activity.py    ActivityMonitor — pane scraping for live status
        ├─► github.py      gh CLI wrapper for PR URL lookup
+       ├─► tasks/         pluggable task queue (LocalBackend, GitHubIssuesBackend)
        └─► TUI (tui/app.py — Textual app in tmux window 0)
             └─► spawns worktree windows via WorktreeManager
 ```
@@ -51,7 +52,7 @@ CLI (Click) → bouquet start/stop/init (args optional, infers from cwd + .bouqu
 - **CLI args are optional** — `bouquet start`/`stop` default to cwd as repo and read project name from `.bouquet.toml`. Errors clearly if not in a git repo or no config found.
 - **Window names use full branch** — `_window_name()` replaces `/` with `-` (e.g. `feature/auth` → `feature-auth`). Previous behavior used only the last segment, causing collisions.
 - **Window-ID-based tmux operations** — `TmuxManager` has both name-based (legacy) and ID-based methods. Prefer ID-based (`send_keys_to_window_id`, `switch_to_window_by_id`, `kill_window_by_id`) to avoid window name collisions.
-- **Activity polling** — `ActivityMonitor` runs every 2s in the TUI via `set_interval` + `@work(thread=True)`. SHA256 hashing of pane content; hash change → RUNNING, stable 3+ polls → IDLE (or WAITING if a permission prompt is detected).
+- **Activity polling** — `ActivityMonitor` runs every 2s in the TUI via `set_interval` + `@work(thread=True)`. SHA256 hashing of pane content; hash change → RUNNING, stable 3+ polls → IDLE (or WAITING if a permission prompt is detected). Prompt detection scans the last 10 lines (not 5 — Claude Code permission menus are 7+ lines tall). The poll worker re-checks `wt.status in POLLABLE_STATUSES` before overwriting, preventing race conditions where a REMOVING/CREATING status gets clobbered by an ERROR from a dying pane.
 - **Agent profiles** — `AgentConfig.resolve_profile(name)` resolves a named profile or falls back to the top-level `command`/`args`. Backward-compatible: old configs without `profiles` work unchanged.
 - **Bootstrap setup commands** — `BootstrapConfig.setup_commands` runs shell commands in a single bash context before dependency installation. Env vars exported by these commands are captured (via a `python3` JSON dump to a temp file — portable across macOS/Linux) and propagated to deps install subprocesses and the tmux session (via `set_environment`). Use case: private registry auth (e.g. AWS CodeArtifact tokens).
 - **Bootstrap python_version** — Optional `BootstrapConfig.python_version` runs `uv python pin <version>` in the worktree before dependency installation. Ensures consistent Python version across worktrees regardless of what's available on the system.
@@ -62,7 +63,7 @@ CLI (Click) → bouquet start/stop/init (args optional, infers from cwd + .bouqu
 - **Task queue** — Pluggable backend system (`TaskQueueBackend` ABC in `src/bouquet/tasks/base.py`). Two backends: `LocalBackend` (SQLite, `~/.local/state/bouquet/{project}.tasks.db`) and `GitHubIssuesBackend` (`gh` CLI wrapper). Backend is synchronous; TUI wraps calls in `@work(thread=True)`. Task ID is always a string (SQLite rowids or GitHub issue numbers). Factory in `src/bouquet/tasks/__init__.py` creates the backend from `TaskQueueConfig`. Set `backend = "github"` in config to use GitHub Issues.
 - **GitHub Issues backend** — Maps task status to GitHub: OPEN = open issue (no label), IN_PROGRESS = open issue + `in-progress` label, DONE = closed issue. Branch is stored as a hidden HTML comment in the issue body (`<!-- bouquet:branch:... -->`). The `label_filter` config (default `"bouquet"`) controls which issues are visible as tasks. Internal labels (`bouquet`, `in-progress`) are filtered from `task.labels`. Requires `gh` CLI authenticated; raises `GitHubError` on init if missing.
 - **Task pickup** — `WorktreeManager.pick_up_task()` generates branch `{prefix}{id}-{sanitized_title}`, updates task status to IN_PROGRESS, creates worktree via `create()`, waits ~3s for agent startup, then sends task description via `send_keys_to_pane`. The prompt is sent AFTER the agent starts — no modification to the agent launch flow.
-- **Task TUI keybindings** — `c` creates a task (opens `CreateTaskScreen` modal), `x` picks up the highlighted task in `TaskQueueTable`, `m` marks the highlighted task as done. Task table refreshes on mount, after create, after pickup, after complete, and on `r`.
+- **Task TUI keybindings** — `c` creates a task (opens `CreateTaskScreen` modal), `x` picks up the highlighted task in `TaskQueueTable`, `m` completes the highlighted task (opens `CompleteTaskScreen` — if a worktree is associated via `task_id`, offers to remove it too). Task table refreshes on mount, after create, after pickup, after complete, and on `r`.
 - **Task state reconciliation** — IN_PROGRESS tasks with no matching worktree are reset to OPEN on startup and shutdown. On TUI `on_mount()`, `_reconcile_tasks()` first restores `task_id` links for adopted worktrees whose branches match IN_PROGRESS tasks, then resets remaining stale tasks via `TaskQueueBackend.reconcile_stale(active_branches)`. On `bouquet stop`, `reconcile_stale(set())` resets all IN_PROGRESS tasks before teardown. A task with `branch=None` is always considered stale.
 
 ## Configuration
@@ -82,6 +83,7 @@ Config search order: `--config` flag → `.bouquet.toml` in repo root → `~/.co
 - `mock_tmux` fixture (MagicMock) avoids real tmux dependency in WorktreeManager tests
 - Tests that monkeypatch `SessionState.state_dir` redirect state persistence to temp dirs
 - CLI tests use Click's `CliRunner` with mocked `TmuxManager` — no real tmux needed
+- GitHub Issues backend tests mock `_run_gh` and `gh_available` — no real `gh` CLI or network calls
 - No interactive tmux or TUI rendering tests — TUI is tested at widget/data level only
 
 ## Important Instructions

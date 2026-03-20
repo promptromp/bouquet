@@ -34,7 +34,7 @@ bouquet start              # TUI launches, create worktrees, agents spin up
 
 - Python 3.14+
 - [tmux](https://github.com/tmux/tmux) (`brew install tmux`)
-- [GitHub CLI](https://cli.github.com/) (optional, `brew install gh` — enables PR link lookup in the TUI)
+- [GitHub CLI](https://cli.github.com/) (optional, `brew install gh` — enables PR links in TUI and GitHub Issues task backend)
 - [direnv](https://direnv.net/) (optional, `brew install direnv`)
 - Language package managers as needed (`uv`, `pnpm`)
 
@@ -94,7 +94,11 @@ bouquet start my-project --repo /path/to/repo --config /path/to/.bouquet.toml
 | `A` | Toggle auto-accept for selected worktree (auto-sends "y" at permission prompts) |
 | `P` | Send a prompt to selected or all agent terminal(s) via tmux send-keys |
 | `T` | Request a status summary from all agents (captures responses) |
-| `R` | Refresh the worktree list |
+| `C` | Create a new task in the task queue |
+| `X` | Pick up the highlighted task (creates worktree and sends task to agent) |
+| `M` | Complete the highlighted task (optionally remove the associated worktree) |
+| `Backspace` | Delete the highlighted task from the queue |
+| `R` | Refresh the worktree list and task queue |
 | `Q` | Quit (with confirmation — kills the session) |
 
 When you create a worktree, bouquet will:
@@ -111,7 +115,7 @@ Switch back to the orchestrator: `Ctrl-b 0`.
 bouquet stop
 ```
 
-Cleans up all managed worktrees, kills the tmux session, and removes state.
+Cleans up all managed worktrees, resets any in-progress tasks back to open, kills the tmux session, and removes state.
 
 ---
 
@@ -186,6 +190,42 @@ This replaces the static "active" status with live feedback. The TUI table updat
 
 ---
 
+## Task Queue
+
+Define a backlog of tasks that agents pick up automatically. Two backends are supported:
+
+### Local (SQLite) — default
+
+Tasks are stored in `~/.local/state/bouquet/<project>.tasks.db`. No external dependencies.
+
+```toml
+[task_queue]
+backend = "local"
+auto_branch_prefix = "task/"
+```
+
+### GitHub Issues
+
+Uses your repo's GitHub Issues as the task source. Requires `gh` CLI authenticated.
+
+```toml
+[task_queue]
+backend = "github"
+label_filter = "bouquet"     # only issues with this label appear as tasks
+auto_branch_prefix = "task/"
+```
+
+**Status mapping:** OPEN = open issue, IN_PROGRESS = open issue + `in-progress` label, DONE = closed issue.
+
+### Task workflow
+
+1. **Create** (`c`) — opens a dialog to create a task (or create a GitHub issue with the `bouquet` label)
+2. **Pick up** (`x`) — creates a worktree from the task, marks it in-progress, and sends the task description to the agent
+3. **Complete** (`m`) — marks the task as done, optionally removes the associated worktree
+4. **Reconciliation** — on startup, tasks stuck as in-progress (from a crash or quit) are automatically reset to open if their worktree no longer exists
+
+---
+
 ### Pane Layout
 
 With `layout = "main-vertical"` and two services:
@@ -205,7 +245,7 @@ With `layout = "main-vertical"` and two services:
 ```
 The Conceptual Stack
 ┌─────────────────────────────────────────┐
-│         Orchestration Layer             │  ← TUI, agent coordination
+│         Orchestration Layer             │  ← TUI, agent coordination, task queue
 ├─────────────────────────────────────────┤
 │         Session / Mux Layer             │  ← tmux sessions, windows, panes
 ├─────────────────────────────────────────┤
