@@ -21,20 +21,20 @@ CLI (Click) → bouquet start/stop/init
 ## Conceptual Layers
 
 ```mermaid
-block-beta
-    columns 1
-    block:orchestration["Orchestration Layer"]
-        A["TUI"] B["Agent Coordination"] C["Task Queue"]
+graph TD
+    subgraph orchestration ["Orchestration Layer"]
+        A["TUI"] ~~~ B["Agent Coordination"] ~~~ C["Task Queue"]
     end
-    block:session["Session / Mux Layer"]
-        D["tmux sessions"] E["windows"] F["panes"]
+    subgraph session ["Session / Mux Layer"]
+        D["tmux sessions"] ~~~ E["windows"] ~~~ F["panes"]
     end
-    block:isolation["Isolation Layer"]
-        G["git worktrees"] H["env isolation"]
+    subgraph isolation ["Isolation Layer"]
+        G["git worktrees"] ~~~ H["env isolation"]
     end
-    block:environment["Environment Layer"]
-        I["venv / node_modules"] J["env vars"]
+    subgraph environment ["Environment Layer"]
+        I["venv / node_modules"] ~~~ J["env vars"]
     end
+    orchestration --> session --> isolation --> environment
 ```
 
 ## Key Flow
