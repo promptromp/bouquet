@@ -7,7 +7,6 @@ from unittest.mock import MagicMock
 
 import pytest
 
-import bouquet.models as models_mod
 from bouquet.config import AgentProfile, BouquetSettings, ServiceConfig
 from bouquet.git import create_worktree as git_create_worktree
 from bouquet.models import SessionState, WorktreeStatus
@@ -33,19 +32,10 @@ def mock_tmux() -> MagicMock:
 def manager(
     sample_settings: BouquetSettings,
     tmp_git_repo: Path,
-    tmp_path: Path,
     mock_tmux: MagicMock,
-    monkeypatch: object,
+    mock_state_dir: Path,
 ) -> WorktreeManager:
     """Return a WorktreeManager with mocked tmux and redirected state dir."""
-    state_dir = tmp_path / "state"
-    state_dir.mkdir()
-    monkeypatch.setattr(  # type: ignore[attr-defined]
-        models_mod.SessionState,
-        "state_dir",
-        classmethod(lambda cls: state_dir),
-    )
-
     state = SessionState(
         project_name="test-project",
         tmux_session_name="bouquet-test-project",
@@ -181,18 +171,10 @@ def test_adopt_existing_allocates_indices(manager: WorktreeManager, tmp_git_repo
 def test_create_with_services(
     sample_settings: BouquetSettings,
     tmp_git_repo: Path,
-    tmp_path: Path,
-    monkeypatch: object,
+    mock_tmux: MagicMock,
+    mock_state_dir: Path,
 ) -> None:
     """When services are configured, create should call setup_service_panes."""
-    state_dir = tmp_path / "state"
-    state_dir.mkdir()
-    monkeypatch.setattr(  # type: ignore[attr-defined]
-        models_mod.SessionState,
-        "state_dir",
-        classmethod(lambda cls: state_dir),
-    )
-
     sample_settings.bootstrap.python_deps_command = ""
     sample_settings.bootstrap.node_deps_command = ""
     sample_settings.bootstrap.copy_env_files = []
@@ -203,14 +185,6 @@ def test_create_with_services(
     ]
     sample_settings.tmux.layout = "main-vertical"
 
-    tmux = MagicMock()
-    mock_window = MagicMock()
-    mock_window.window_id = "@1"
-    mock_pane = MagicMock()
-    mock_pane.pane_id = "%1"
-    mock_window.active_pane = mock_pane
-    tmux.create_window.return_value = mock_window
-
     state = SessionState(
         project_name="test-project",
         tmux_session_name="bouquet-test-project",
@@ -218,12 +192,12 @@ def test_create_with_services(
     )
     state.save()
 
-    mgr = WorktreeManager(sample_settings, state, tmux)
+    mgr = WorktreeManager(sample_settings, state, mock_tmux)
     info = mgr.create("feature/svc-test")
 
     # Verify setup_service_panes was called with rendered commands
-    tmux.setup_service_panes.assert_called_once()
-    call_kwargs = tmux.setup_service_panes.call_args
+    mock_tmux.setup_service_panes.assert_called_once()
+    call_kwargs = mock_tmux.setup_service_panes.call_args
     rendered_cmds = call_kwargs.kwargs.get("service_commands") or call_kwargs[1].get("service_commands")
     if rendered_cmds is None:
         rendered_cmds = call_kwargs[0][1]
@@ -248,18 +222,10 @@ def test_create_without_services_no_panes(manager: WorktreeManager) -> None:
 def test_create_with_services_uses_default_layout(
     sample_settings: BouquetSettings,
     tmp_git_repo: Path,
-    tmp_path: Path,
-    monkeypatch: object,
+    mock_tmux: MagicMock,
+    mock_state_dir: Path,
 ) -> None:
     """Default layout should be services-top."""
-    state_dir = tmp_path / "state"
-    state_dir.mkdir()
-    monkeypatch.setattr(  # type: ignore[attr-defined]
-        models_mod.SessionState,
-        "state_dir",
-        classmethod(lambda cls: state_dir),
-    )
-
     sample_settings.bootstrap.python_deps_command = ""
     sample_settings.bootstrap.node_deps_command = ""
     sample_settings.bootstrap.copy_env_files = []
@@ -269,14 +235,6 @@ def test_create_with_services_uses_default_layout(
     ]
     # Don't set layout — should default to "services-top"
 
-    tmux = MagicMock()
-    mock_window = MagicMock()
-    mock_window.window_id = "@1"
-    mock_pane = MagicMock()
-    mock_pane.pane_id = "%1"
-    mock_window.active_pane = mock_pane
-    tmux.create_window.return_value = mock_window
-
     state = SessionState(
         project_name="test-project",
         tmux_session_name="bouquet-test-project",
@@ -284,10 +242,10 @@ def test_create_with_services_uses_default_layout(
     )
     state.save()
 
-    mgr = WorktreeManager(sample_settings, state, tmux)
+    mgr = WorktreeManager(sample_settings, state, mock_tmux)
     mgr.create("feature/default-layout")
 
-    call_kwargs = tmux.setup_service_panes.call_args
+    call_kwargs = mock_tmux.setup_service_panes.call_args
     assert call_kwargs.kwargs.get("layout") == "services-top"
 
 
@@ -297,31 +255,15 @@ def test_create_with_services_uses_default_layout(
 def test_create_with_setup_commands_sets_tmux_env(
     sample_settings: BouquetSettings,
     tmp_git_repo: Path,
-    tmp_path: Path,
-    monkeypatch: object,
+    mock_tmux: MagicMock,
+    mock_state_dir: Path,
 ) -> None:
     """Setup command env vars should be set on the tmux session."""
-    state_dir = tmp_path / "state"
-    state_dir.mkdir()
-    monkeypatch.setattr(  # type: ignore[attr-defined]
-        models_mod.SessionState,
-        "state_dir",
-        classmethod(lambda cls: state_dir),
-    )
-
     sample_settings.bootstrap.setup_commands = ["export BOUQUET_TMUX_TEST=hello"]
     sample_settings.bootstrap.python_deps_command = ""
     sample_settings.bootstrap.node_deps_command = ""
     sample_settings.bootstrap.copy_env_files = []
     sample_settings.bootstrap.use_cow_clone = False
-
-    tmux = MagicMock()
-    mock_window = MagicMock()
-    mock_window.window_id = "@1"
-    mock_pane = MagicMock()
-    mock_pane.pane_id = "%1"
-    mock_window.active_pane = mock_pane
-    tmux.create_window.return_value = mock_window
 
     state = SessionState(
         project_name="test-project",
@@ -330,11 +272,11 @@ def test_create_with_setup_commands_sets_tmux_env(
     )
     state.save()
 
-    mgr = WorktreeManager(sample_settings, state, tmux)
+    mgr = WorktreeManager(sample_settings, state, mock_tmux)
     mgr.create("feature/setup-env-test")
 
     # Verify set_session_environment was called with the exported var
-    tmux.set_session_environment.assert_any_call(
+    mock_tmux.set_session_environment.assert_any_call(
         "bouquet-test-project",
         "BOUQUET_TMUX_TEST",
         "hello",
@@ -394,19 +336,10 @@ def test_agent_args_sent_to_tmux(manager: WorktreeManager) -> None:
 def test_agent_profile_args_sent_to_tmux(
     sample_settings: BouquetSettings,
     tmp_git_repo: Path,
-    tmp_path: Path,
     mock_tmux: MagicMock,
-    monkeypatch: object,
+    mock_state_dir: Path,
 ) -> None:
     """Named profile args should be sent to tmux instead of top-level args."""
-    state_dir = tmp_path / "state"
-    state_dir.mkdir()
-    monkeypatch.setattr(  # type: ignore[attr-defined]
-        models_mod.SessionState,
-        "state_dir",
-        classmethod(lambda cls: state_dir),
-    )
-
     sample_settings.agent.profiles = [
         AgentProfile(name="auto", command="claude", args=["--dangerously-skip-permissions", "--chrome"]),
     ]

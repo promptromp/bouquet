@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import tomllib
 from datetime import datetime
 from pathlib import Path
 from unittest.mock import MagicMock, patch
@@ -95,7 +96,7 @@ def test_stop_no_args_no_config_errors(tmp_git_repo: Path) -> None:
 @patch("bouquet.cli.create_backend")
 @patch("bouquet.cli.TmuxManager")
 def test_stop_reconciles_stale_tasks(
-    mock_tmux_cls: MagicMock, mock_create_backend: MagicMock, tmp_git_repo: Path, tmp_path: Path
+    mock_tmux_cls: MagicMock, mock_create_backend: MagicMock, tmp_git_repo: Path, mock_state_dir: Path
 ) -> None:
     """bouquet stop should reset all IN_PROGRESS tasks via reconcile_stale(set())."""
     (tmp_git_repo / ".bouquet.toml").write_text('[project]\nname = "my-proj"\n')
@@ -107,15 +108,12 @@ def test_stop_reconciles_stale_tasks(
         repo_path=tmp_git_repo,
         created_at=datetime(2026, 3, 20, 10, 0),
     )
-    state_dir = tmp_path / "state"
-    state_dir.mkdir()
+    state.save()
 
     mock_backend = mock_create_backend.return_value
 
-    with patch.object(SessionState, "state_dir", return_value=state_dir):
-        state.save()
-        runner = CliRunner()
-        result = runner.invoke(cli, ["stop", "--repo", str(tmp_git_repo)])
+    runner = CliRunner()
+    result = runner.invoke(cli, ["stop", "--repo", str(tmp_git_repo)])
 
     assert result.exit_code == 0
     mock_backend.reconcile_stale.assert_called_once_with(set())
@@ -124,7 +122,7 @@ def test_stop_reconciles_stale_tasks(
 @patch("bouquet.cli.create_backend")
 @patch("bouquet.cli.TmuxManager")
 def test_stop_with_explicit_name_reconciles(
-    mock_tmux_cls: MagicMock, mock_create_backend: MagicMock, tmp_git_repo: Path, tmp_path: Path
+    mock_tmux_cls: MagicMock, mock_create_backend: MagicMock, tmp_git_repo: Path, mock_state_dir: Path
 ) -> None:
     """bouquet stop <name> should also reconcile tasks."""
     state = SessionState(
@@ -133,15 +131,12 @@ def test_stop_with_explicit_name_reconciles(
         repo_path=tmp_git_repo,
         created_at=datetime(2026, 3, 20, 10, 0),
     )
-    state_dir = tmp_path / "state"
-    state_dir.mkdir()
+    state.save()
 
     mock_backend = mock_create_backend.return_value
 
-    with patch.object(SessionState, "state_dir", return_value=state_dir):
-        state.save()
-        runner = CliRunner()
-        result = runner.invoke(cli, ["stop", "my-proj"])
+    runner = CliRunner()
+    result = runner.invoke(cli, ["stop", "my-proj"])
 
     assert result.exit_code == 0
     mock_backend.reconcile_stale.assert_called_once_with(set())
@@ -198,6 +193,9 @@ def test_init_creates_config_file(tmp_git_repo: Path) -> None:
     content = config_file.read_text()
     assert tmp_git_repo.name in content
     assert "Created" in result.output
+    # Verify it's valid TOML with the expected project name
+    parsed = tomllib.loads(content)
+    assert parsed["project"]["name"] == tmp_git_repo.name
 
 
 def test_init_refuses_if_config_exists(tmp_git_repo: Path) -> None:

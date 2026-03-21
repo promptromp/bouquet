@@ -54,20 +54,22 @@ class ClaudeCodeAdapter(AgentAdapter):
                 stdout=asyncio.subprocess.PIPE,
                 stderr=asyncio.subprocess.PIPE,
             )
-            stdout, stderr = await asyncio.wait_for(proc.communicate(), timeout=timeout)
-        except TimeoutError:
-            proc.kill()  # type: ignore[union-attr]
-            return AgentResponse(
-                worktree_branch=branch,
-                result="",
-                error=f"Timed out after {timeout}s",
-                duration_ms=int((time.monotonic() - start) * 1000),
-            )
         except Exception as exc:
             return AgentResponse(
                 worktree_branch=branch,
                 result="",
                 error=str(exc),
+                duration_ms=int((time.monotonic() - start) * 1000),
+            )
+
+        try:
+            stdout, stderr = await asyncio.wait_for(proc.communicate(), timeout=timeout)
+        except TimeoutError:
+            proc.kill()
+            return AgentResponse(
+                worktree_branch=branch,
+                result="",
+                error=f"Timed out after {timeout}s",
                 duration_ms=int((time.monotonic() - start) * 1000),
             )
 

@@ -110,3 +110,16 @@ def test_whitespace_in_expression() -> None:
 def test_expression_embedded_in_command() -> None:
     tpl = "uvicorn app:main --port {{ 8000 + BOUQUET_WORKTREE_INDEX }} --reload"
     assert render_template(tpl, VARIABLES) == "uvicorn app:main --port 8003 --reload"
+
+
+# --- zero-value index ---
+
+
+def test_zero_index_variable() -> None:
+    variables = {**VARIABLES, "BOUQUET_WORKTREE_INDEX": 0}
+    assert render_template("{{ BOUQUET_WORKTREE_INDEX }}", variables) == "0"
+
+
+def test_zero_index_in_arithmetic() -> None:
+    variables = {**VARIABLES, "BOUQUET_WORKTREE_INDEX": 0}
+    assert render_template("{{ 8000 + BOUQUET_WORKTREE_INDEX }}", variables) == "8000"

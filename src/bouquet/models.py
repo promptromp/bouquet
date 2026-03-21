@@ -65,6 +65,14 @@ class SessionState(BaseModel):
         data = json.loads(path.read_text())
         return cls.model_validate(data)
 
+    def find_worktree(self, branch: str) -> WorktreeInfo | None:
+        """Find a worktree by branch name, or None if not found."""
+        return next((w for w in self.worktrees if w.branch == branch), None)
+
+    def remove_worktree(self, branch: str) -> None:
+        """Remove a worktree from the list by branch name."""
+        self.worktrees = [w for w in self.worktrees if w.branch != branch]
+
     def delete_state(self) -> None:
         """Remove the state file."""
         path = self.state_file(self.project_name)

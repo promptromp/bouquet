@@ -297,7 +297,7 @@ class OrchestratorApp(App):
             self.call_from_thread(self.notify, f"Worktree '{branch}' created")
         except Exception as e:
             # Remove the placeholder on error
-            self.session_state.worktrees = [w for w in self.session_state.worktrees if w.branch != branch]
+            self.session_state.remove_worktree(branch)
             self.call_from_thread(self._refresh_table)
             self.call_from_thread(self.notify, f"Error creating worktree: {e}", severity="error")
 
@@ -309,7 +309,7 @@ class OrchestratorApp(App):
             return
         row_data = event.data_table.get_row(event.row_key)
         branch = str(row_data[_WORKTREE_BRANCH_COL])
-        wt = next((w for w in self.session_state.worktrees if w.branch == branch), None)
+        wt = self.session_state.find_worktree(branch)
         detail = self.query_one(WorktreeDetailPanel)
         detail.show_worktree(wt)
         if wt and detail.needs_pr_lookup(branch):
@@ -352,7 +352,7 @@ class OrchestratorApp(App):
         branch = self._get_selected_branch()
         if not branch:
             return
-        wt = next((w for w in self.session_state.worktrees if w.branch == branch), None)
+        wt = self.session_state.find_worktree(branch)
         if wt is None:
             return
         wt.auto_accept = not wt.auto_accept
@@ -370,7 +370,7 @@ class OrchestratorApp(App):
         if not branch:
             return
         # Show REMOVING status immediately
-        info = next((w for w in self.session_state.worktrees if w.branch == branch), None)
+        info = self.session_state.find_worktree(branch)
         if info:
             info.status = WorktreeStatus.REMOVING
             self._refresh_table()
@@ -380,7 +380,7 @@ class OrchestratorApp(App):
     def _remove_worktree(self, branch: str) -> None:
         """Remove a worktree in a background thread."""
         # Clean up activity monitor state
-        info = next((w for w in self.session_state.worktrees if w.branch == branch), None)
+        info = self.session_state.find_worktree(branch)
         if info:
             self._cleanup_worktree_monitoring(info)
         try:
@@ -608,7 +608,7 @@ class OrchestratorApp(App):
         try:
             task = self.task_backend.get_task(task_id)
             if task is None:
-                self.session_state.worktrees = [w for w in self.session_state.worktrees if w.branch != branch]
+                self.session_state.remove_worktree(branch)
                 self.call_from_thread(self._refresh_table)
                 self.call_from_thread(self.notify, f"Task {task_id} not found", severity="error")
                 return
@@ -625,7 +625,7 @@ class OrchestratorApp(App):
             self.call_from_thread(self.notify, f"Picked up task: {task.title}")
         except Exception as e:
             # Remove the placeholder on error
-            self.session_state.worktrees = [w for w in self.session_state.worktrees if w.branch != branch]
+            self.session_state.remove_worktree(branch)
             self.call_from_thread(self._refresh_table)
             self.call_from_thread(self._refresh_tasks)
             self.call_from_thread(self.notify, f"Error picking up task: {e}", severity="error")
@@ -665,7 +665,7 @@ class OrchestratorApp(App):
             self.call_from_thread(self._refresh_tasks)
 
             if remove_worktree and branch:
-                info = next((w for w in self.session_state.worktrees if w.branch == branch), None)
+                info = self.session_state.find_worktree(branch)
                 if info:
                     self._cleanup_worktree_monitoring(info)
                     info.status = WorktreeStatus.REMOVING

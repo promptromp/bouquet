@@ -7,7 +7,9 @@ from pathlib import Path
 
 import pytest
 
+import bouquet.models as models_mod
 from bouquet.config import BouquetSettings
+from bouquet.tasks.local import LocalBackend
 
 
 @pytest.fixture
@@ -49,6 +51,25 @@ def sample_settings(tmp_git_repo: Path) -> BouquetSettings:
     settings.project.repo_path = str(tmp_git_repo)
     settings.project.base_branch = "main"
     return settings
+
+
+@pytest.fixture
+def mock_state_dir(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
+    """Redirect SessionState.state_dir to a temp directory."""
+    state_dir = tmp_path / "state"
+    state_dir.mkdir()
+    monkeypatch.setattr(
+        models_mod.SessionState,
+        "state_dir",
+        classmethod(lambda cls: state_dir),
+    )
+    return state_dir
+
+
+@pytest.fixture
+def local_backend(tmp_path: Path) -> LocalBackend:
+    """Return a LocalBackend backed by a temp SQLite database."""
+    return LocalBackend(db_path=str(tmp_path / "tasks.db"))
 
 
 @pytest.fixture

@@ -148,7 +148,7 @@ class WorktreeManager:
         wt_path = self._worktree_path(branch)
 
         # Reuse a pre-registered placeholder (from TUI) or create a new entry
-        info = next((w for w in self.state.worktrees if w.branch == branch), None)
+        info = self.state.find_worktree(branch)
         if info is not None:
             info.path = wt_path
             info.status = WorktreeStatus.CREATING
@@ -232,7 +232,7 @@ class WorktreeManager:
     def remove(self, branch: str) -> None:
         """Remove a worktree and its associated tmux window."""
         # Find the worktree info
-        info = next((w for w in self.state.worktrees if w.branch == branch), None)
+        info = self.state.find_worktree(branch)
         if info is None:
             return
 
@@ -253,7 +253,7 @@ class WorktreeManager:
             git.remove_worktree(self.repo_path, info.path)
 
         # Remove from state
-        self.state.worktrees = [w for w in self.state.worktrees if w.branch != branch]
+        self.state.remove_worktree(branch)
         self.state.save()
 
     def remove_all(self) -> None:
@@ -263,7 +263,7 @@ class WorktreeManager:
 
     def switch_to(self, branch: str) -> None:
         """Switch to the tmux window for a given branch."""
-        info = next((w for w in self.state.worktrees if w.branch == branch), None)
+        info = self.state.find_worktree(branch)
         if info and info.tmux_window_id:
             self.tmux.switch_to_window_by_id(self.session_name, info.tmux_window_id)
         else:
