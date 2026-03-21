@@ -4,7 +4,9 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from bouquet.tasks.base import TaskStatus
+import pytest
+
+from bouquet.tasks.base import TaskBackendError, TaskStatus
 from bouquet.tasks.local import LocalBackend
 
 
@@ -172,6 +174,12 @@ def test_reconcile_stale_task_with_no_branch(tmp_path: Path) -> None:
     assert len(reset) == 1
     assert reset[0].id == t1.id
     assert backend.get_task(t1.id).status == TaskStatus.OPEN  # type: ignore[union-attr]
+
+
+def test_update_status_not_found_raises_backend_error(tmp_path: Path) -> None:
+    backend = LocalBackend(db_path=str(tmp_path / "tasks.db"))
+    with pytest.raises(TaskBackendError, match="not found"):
+        backend.update_status("999", TaskStatus.DONE)
 
 
 def test_task_timestamps(tmp_path: Path) -> None:

@@ -100,6 +100,13 @@ class WorktreeDetailPanel(Static):
         self._pr_pending: set[str] = set()
         self._rows: dict[str, str] = {}
 
+    @property
+    def current_branch(self) -> str | None:
+        return self._current_branch
+
+    def needs_pr_lookup(self, branch: str) -> bool:
+        return branch not in self._pr_cache and branch not in self._pr_pending
+
     def show_worktree(self, wt: WorktreeInfo | None) -> None:
         """Update the panel to show details for the given worktree."""
         self._current_wt = wt

@@ -523,3 +523,18 @@ def test_sanitize_branch_name_truncates() -> None:
 def test_sanitize_branch_name_strips_trailing_dashes() -> None:
     result = sanitize_branch_name("fix---")
     assert not result.endswith("-")
+
+
+def test_sanitize_branch_name_empty_string() -> None:
+    assert sanitize_branch_name("") == ""
+
+
+def test_sanitize_branch_name_all_special_chars() -> None:
+    result = sanitize_branch_name("!@#$%^&*()")
+    assert result == ""
+
+
+def test_sanitize_branch_name_unicode() -> None:
+    result = sanitize_branch_name("修复登录页面")
+    # Non-ASCII chars are replaced by the regex; result should be empty or dashes-stripped
+    assert all(c.isalnum() or c == "-" for c in result) if result else True

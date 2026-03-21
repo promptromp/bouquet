@@ -182,3 +182,43 @@ def test_resolve_project_name_from_config() -> None:
     settings.project.name = "from-config"
     name = _resolve_project_name(None, settings, Path("/tmp"))
     assert name == "from-config"
+
+
+# --- Init command tests ---
+
+
+def test_init_creates_config_file(tmp_git_repo: Path) -> None:
+    """bouquet init should create .bouquet.toml with project name from directory."""
+    runner = CliRunner()
+    result = runner.invoke(cli, ["init", "--repo", str(tmp_git_repo)])
+
+    assert result.exit_code == 0
+    config_file = tmp_git_repo / ".bouquet.toml"
+    assert config_file.exists()
+    content = config_file.read_text()
+    assert tmp_git_repo.name in content
+    assert "Created" in result.output
+
+
+def test_init_refuses_if_config_exists(tmp_git_repo: Path) -> None:
+    """bouquet init should exit with error when .bouquet.toml already exists."""
+    (tmp_git_repo / ".bouquet.toml").write_text('[project]\nname = "existing"\n')
+
+    runner = CliRunner()
+    result = runner.invoke(cli, ["init", "--repo", str(tmp_git_repo)])
+
+    assert result.exit_code != 0
+    assert "already exists" in result.output.lower()
+
+
+def test_init_uses_repo_flag(tmp_git_repo: Path) -> None:
+    """bouquet init --repo should use the specified path."""
+    runner = CliRunner()
+    result = runner.invoke(cli, ["init", "--repo", str(tmp_git_repo)])
+
+    assert result.exit_code == 0
+    config_file = tmp_git_repo / ".bouquet.toml"
+    assert config_file.exists()
+    # Project name should come from the repo directory name
+    content = config_file.read_text()
+    assert tmp_git_repo.name in content

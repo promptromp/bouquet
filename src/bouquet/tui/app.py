@@ -45,7 +45,6 @@ _POLL_INTERVAL_SECONDS = 2.0
 _STATUS_POLL_MAX_WAIT = 120
 _STATUS_POLL_STABILITY_THRESHOLD = 3
 _STATUS_POLL_INITIAL_DELAY = 3
-_STATUS_POLL_INTERVAL = 2
 _STATUS_PROMPT = (
     "Briefly summarize your current progress and state in 2-3 sentences. "
     "What are you working on, what have you done, and what remains?"
@@ -200,8 +199,8 @@ class OrchestratorApp(App):
         table.display = bool(worktrees)
         # Re-render detail panel for the currently selected branch
         detail = self.query_one(WorktreeDetailPanel)
-        if detail._current_branch:
-            wt = next((w for w in worktrees if w.branch == detail._current_branch), None)
+        if detail.current_branch:
+            wt = next((w for w in worktrees if w.branch == detail.current_branch), None)
             detail.show_worktree(wt)
 
     def _sendable_worktrees(self) -> list[WorktreeInfo]:
@@ -313,7 +312,7 @@ class OrchestratorApp(App):
         wt = next((w for w in self.session_state.worktrees if w.branch == branch), None)
         detail = self.query_one(WorktreeDetailPanel)
         detail.show_worktree(wt)
-        if wt and branch not in detail._pr_cache and branch not in detail._pr_pending:
+        if wt and detail.needs_pr_lookup(branch):
             detail.mark_pr_pending(branch)
             self._lookup_pr(branch)
 
@@ -429,7 +428,7 @@ class OrchestratorApp(App):
         # 2. Poll until all agents stabilize (or timeout)
         hashes: dict[str, str] = {}
         stable_counts: dict[str, int] = {}
-        elapsed = 0
+        elapsed = 0.0
 
         time.sleep(_STATUS_POLL_INITIAL_DELAY)
 
@@ -452,8 +451,8 @@ class OrchestratorApp(App):
                         all_stable = False
             if all_stable:
                 break
-            time.sleep(_STATUS_POLL_INTERVAL)
-            elapsed += _STATUS_POLL_INTERVAL
+            time.sleep(_POLL_INTERVAL_SECONDS)
+            elapsed += _POLL_INTERVAL_SECONDS
 
         duration_ms = int((time.monotonic() - start) * 1000)
 
@@ -551,12 +550,8 @@ class OrchestratorApp(App):
         task_table = self.query_one(TaskQueueTable)
         self.call_from_thread(task_table.refresh_tasks, tasks)
 
-    def _refresh_tasks(self) -> None:
-        """Refresh the task queue table from the backend."""
-        self._refresh_tasks_worker()
-
     @work(thread=True, group="task-refresh")
-    def _refresh_tasks_worker(self) -> None:
+    def _refresh_tasks(self) -> None:
         tasks = self.task_backend.list_tasks()
         task_table = self.query_one(TaskQueueTable)
         self.call_from_thread(task_table.refresh_tasks, tasks)

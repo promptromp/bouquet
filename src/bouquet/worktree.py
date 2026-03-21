@@ -129,7 +129,8 @@ class WorktreeManager:
         if info.agent_pane_id:
             self.tmux.send_keys_to_pane(info.agent_pane_id, agent_cmd)
         else:
-            assert info.tmux_window_id is not None
+            if info.tmux_window_id is None:
+                raise RuntimeError("tmux_window_id not set after window creation")
             self.tmux.send_keys_to_window_id(
                 session_name=self.session_name,
                 window_id=info.tmux_window_id,

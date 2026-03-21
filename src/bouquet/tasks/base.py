@@ -55,9 +55,15 @@ class TaskQueueBackend(ABC):
     def delete_task(self, task_id: str) -> None:
         """Delete a task."""
 
-    @abstractmethod
     def reconcile_stale(self, active_branches: set[str]) -> list[Task]:
         """Reset IN_PROGRESS tasks whose branches are not in active_branches back to OPEN.
 
         Returns the list of tasks that were reset.
         """
+        in_progress = self.list_tasks(status=TaskStatus.IN_PROGRESS)
+        reset: list[Task] = []
+        for task in in_progress:
+            if task.branch not in active_branches:
+                self.update_status(task.id, TaskStatus.OPEN)
+                reset.append(task)
+        return reset

@@ -66,7 +66,10 @@ class LocalBackend(TaskQueueBackend):
         )
         self._conn.commit()
         task_id = str(cursor.lastrowid)
-        return self.get_task(task_id)  # type: ignore[return-value]
+        task = self.get_task(task_id)
+        if task is None:
+            raise TaskBackendError(f"Failed to retrieve created task {task_id}")
+        return task
 
     def update_status(self, task_id: str, status: TaskStatus, branch: str | None = None) -> Task:
         now = datetime.now().isoformat()
@@ -89,12 +92,3 @@ class LocalBackend(TaskQueueBackend):
     def delete_task(self, task_id: str) -> None:
         self._conn.execute("DELETE FROM tasks WHERE id = ?", (task_id,))
         self._conn.commit()
-
-    def reconcile_stale(self, active_branches: set[str]) -> list[Task]:
-        in_progress = self.list_tasks(status=TaskStatus.IN_PROGRESS)
-        reset: list[Task] = []
-        for task in in_progress:
-            if task.branch not in active_branches:
-                self.update_status(task.id, TaskStatus.OPEN)
-                reset.append(task)
-        return reset
