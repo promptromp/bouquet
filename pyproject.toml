@@ -1,5 +1,5 @@
 [project]
-name = "bouquet"
+name = "pybouquet"
 description = "An orchestration layer for agentic coding"
 readme = "README.md"
 license = "MIT"

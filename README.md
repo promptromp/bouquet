@@ -42,10 +42,10 @@ bouquet start              # TUI launches, create worktrees, agents spin up
 
 ```bash
 # Run without installing
-uvx bouquet --help
+uvx pybouquet --help
 
 # Or install via pip
-pip install bouquet
+pip install pybouquet
 
 # Or from source (development)
 git clone https://github.com/promptromp/bouquet.git
