@@ -1,0 +1,63 @@
+site_name: bouquet
+site_url: https://promptromp.github.io/bouquet
+repo_name: bouquet
+repo_url: https://github.com/promptromp/bouquet
+
+theme:
+  name: material
+  logo: assets/logo.png
+  favicon: assets/logo.png
+  font:
+    text: Merriweather Sans
+    code: Red Hat Mono
+  palette:
+    # Dark Mode
+    - scheme: slate
+      toggle:
+        icon: material/weather-sunny
+        name: Dark mode
+      primary: deep purple
+      accent: amber
+    # Light Mode
+    - scheme: default
+      toggle:
+        icon: material/weather-night
+        name: Light mode
+      primary: deep purple
+      accent: amber
+  features:
+    - content.code.copy
+    - navigation.footer
+
+markdown_extensions:
+  - admonition
+  - attr_list
+  - pymdownx.details
+  - pymdownx.emoji:
+      emoji_index: !!python/name:material.extensions.emoji.twemoji
+      emoji_generator: !!python/name:material.extensions.emoji.to_svg
+  - pymdownx.highlight:
+      anchor_linenums: true
+      line_spans: __span
+      pygments_lang_class: true
+  - pymdownx.inlinehilite
+  - pymdownx.snippets
+  - pymdownx.superfences:
+      custom_fences:
+        - name: mermaid
+          class: mermaid
+          format: !!python/name:pymdownx.superfences.fence_code_format
+  - pymdownx.tabbed:
+      alternate_style: true
+
+nav:
+  - Home: README.md
+  - Configuration: configuration.md
+  - Architecture: architecture.md
+
+extra:
+  social:
+    - icon: simple/github
+      link: https://github.com/promptromp/bouquet
+
+copyright: Copyright &copy; 2025 PromptRomp
