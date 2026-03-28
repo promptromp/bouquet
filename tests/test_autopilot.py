@@ -176,3 +176,81 @@ def test_tick_fan_out_parallel(
     tasks = controller.tick(session_state)
     assert len(tasks) == 2
     assert {t.title for t in tasks} == {"Child A", "Child B"}
+
+
+def test_stop_clears_picked_up_ids_fully(
+    controller: AutopilotController, backend: LocalBackend, session_state: SessionState
+) -> None:
+    """Verify stop/start cycle fully resets internal tracking state."""
+    backend.create_task("Task A")
+    backend.create_task("Task B")
+    controller.start()
+
+    # Pick up both tasks
+    tasks1 = controller.tick(session_state)
+    assert len(tasks1) == 2
+
+    # Stop and restart — picked_up_ids must be cleared
+    controller.stop()
+    assert not controller.active
+    controller.start()
+
+    # Tasks are still OPEN, so they should be returned again
+    tasks2 = controller.tick(session_state)
+    assert len(tasks2) == 2
+
+
+def test_tick_chain_unblocks_progressively(
+    controller: AutopilotController, backend: LocalBackend, session_state: SessionState
+) -> None:
+    """A->B->C chain: only A is ready, then B after A is done, then C."""
+    a = backend.create_task("A")
+    b = backend.create_task("B", parent_id=a.id)
+    c = backend.create_task("C", parent_id=b.id)
+    controller.start()
+
+    # Only A is ready
+    tasks = controller.tick(session_state)
+    assert [t.id for t in tasks] == [a.id]
+
+    # Complete A, clear tracking — B should become ready
+    backend.update_status(a.id, TaskStatus.DONE)
+    controller.on_task_completed(a.id)
+    tasks = controller.tick(session_state)
+    assert [t.id for t in tasks] == [b.id]
+
+    # Complete B — C should become ready
+    backend.update_status(b.id, TaskStatus.DONE)
+    controller.on_task_completed(b.id)
+    tasks = controller.tick(session_state)
+    assert [t.id for t in tasks] == [c.id]
+
+
+def test_tick_does_not_return_in_progress_tasks(
+    controller: AutopilotController, backend: LocalBackend, session_state: SessionState
+) -> None:
+    """Tasks already IN_PROGRESS should not be returned by tick."""
+    task = backend.create_task("Running task")
+    backend.update_status(task.id, TaskStatus.IN_PROGRESS, branch="task/1-running")
+    controller.start()
+
+    tasks = controller.tick(session_state)
+    assert tasks == []
+
+
+def test_tick_ignores_worktrees_without_task_id(
+    controller: AutopilotController, backend: LocalBackend, session_state: SessionState
+) -> None:
+    """Manual worktrees (no task_id) should not count toward concurrency limit."""
+    backend.create_task("Task A")
+    backend.create_task("Task B")
+    backend.create_task("Task C")
+    # Add a manual worktree (no task_id)
+    session_state.worktrees.append(
+        WorktreeInfo(branch="manual-wt", path=Path("."), status=WorktreeStatus.ACTIVE)
+    )
+    controller.start()
+
+    # Should still have 2 slots (manual worktree doesn't count)
+    tasks = controller.tick(session_state)
+    assert len(tasks) == 2

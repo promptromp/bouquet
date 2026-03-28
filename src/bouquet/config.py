@@ -237,4 +237,6 @@ backend = "local"
 # label_filter = "bouquet"       # GitHub backend: only show issues with this label
 # sqlite_path = ""               # Override default SQLite path (~/.local/state/bouquet/<project>.tasks.db)
 auto_branch_prefix = "task/"     # Branch prefix when picking up a task (e.g. task/42-fix-login)
+max_autopilot_concurrency = 3    # Max worktrees autopilot will run in parallel
+autopilot_auto_complete = true   # Auto-complete tasks when their worktree goes IDLE (~10s)
 """
