@@ -208,9 +208,18 @@ class OrchestratorApp(App):
         table.display = bool(worktrees)
         # Re-render detail panel for the currently selected branch
         detail = self.query_one(WorktreeDetailPanel)
-        if detail.current_branch:
-            wt = next((w for w in worktrees if w.branch == detail.current_branch), None)
+        branch = detail.current_branch
+        # If no branch is selected yet but we have worktrees, show the first one
+        if not branch and worktrees:
+            branch = worktrees[0].branch
+        if branch:
+            wt = next((w for w in worktrees if w.branch == branch), None)
             detail.show_worktree(wt)
+            # Trigger PR lookup if not yet cached (row_highlighted may not
+            # re-fire after clear+re-add when the cursor stays at row 0)
+            if wt and detail.needs_pr_lookup(branch):
+                detail.mark_pr_pending(branch)
+                self._lookup_pr(branch)
 
     def _sendable_worktrees(self) -> list[WorktreeInfo]:
         """Return worktrees that have a tmux window and are in a pollable state."""
