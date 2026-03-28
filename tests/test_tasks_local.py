@@ -265,9 +265,7 @@ def test_schema_migration_adds_parent_id(tmp_path: Path) -> None:
         );
         CREATE INDEX IF NOT EXISTS idx_tasks_status ON tasks(status);
     """)
-    conn.execute(
-        "INSERT INTO tasks (title, created_at, updated_at) VALUES ('Old task', '2026-01-01', '2026-01-01')"
-    )
+    conn.execute("INSERT INTO tasks (title, created_at, updated_at) VALUES ('Old task', '2026-01-01', '2026-01-01')")
     conn.commit()
     conn.close()
 

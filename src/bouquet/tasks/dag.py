@@ -70,6 +70,5 @@ def get_ready_tasks(tasks: list[Task]) -> list[Task]:
     return [
         t
         for t in tasks
-        if t.status == TaskStatus.OPEN
-        and (t.parent_id is None or status_by_id.get(t.parent_id) == TaskStatus.DONE)
+        if t.status == TaskStatus.OPEN and (t.parent_id is None or status_by_id.get(t.parent_id) == TaskStatus.DONE)
     ]

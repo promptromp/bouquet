@@ -299,9 +299,7 @@ class OrchestratorApp(App):
                     try:
                         self.task_backend.update_status(wt.task_id, TaskStatus.DONE)
                         self._autopilot.on_task_completed(wt.task_id)
-                        self.call_from_thread(
-                            self.notify, f"Autopilot: task completed (worktree {wt.branch})"
-                        )
+                        self.call_from_thread(self.notify, f"Autopilot: task completed (worktree {wt.branch})")
                         self.call_from_thread(self._refresh_tasks)
                     except Exception:
                         pass

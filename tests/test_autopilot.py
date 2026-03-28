@@ -137,9 +137,7 @@ def test_on_task_completed_clears_tracking(
     assert tasks2 == []
 
 
-def test_stop_clears_state(
-    controller: AutopilotController, backend: LocalBackend, session_state: SessionState
-) -> None:
+def test_stop_clears_state(controller: AutopilotController, backend: LocalBackend, session_state: SessionState) -> None:
     backend.create_task("Task A")
     controller.start()
     controller.tick(session_state)
@@ -246,9 +244,7 @@ def test_tick_ignores_worktrees_without_task_id(
     backend.create_task("Task B")
     backend.create_task("Task C")
     # Add a manual worktree (no task_id)
-    session_state.worktrees.append(
-        WorktreeInfo(branch="manual-wt", path=Path("."), status=WorktreeStatus.ACTIVE)
-    )
+    session_state.worktrees.append(WorktreeInfo(branch="manual-wt", path=Path("."), status=WorktreeStatus.ACTIVE))
     controller.start()
 
     # Should still have 2 slots (manual worktree doesn't count)
