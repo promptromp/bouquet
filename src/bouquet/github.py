@@ -41,28 +41,6 @@ def gh_available() -> bool:
     return shutil.which("gh") is not None
 
 
-def lookup_pr_url(branch: str, cwd: Path | None = None) -> str | None:
-    """Look up the PR URL for a branch using gh.
-
-    Returns the PR URL string, or None if no PR exists for the branch.
-    Raises GitHubError if gh is not installed.
-    """
-    if not gh_available():
-        raise GitHubError("gh CLI is not installed")
-    try:
-        result = subprocess.run(
-            ["gh", "pr", "view", branch, "--json", "url", "--jq", ".url"],
-            cwd=cwd,
-            capture_output=True,
-            text=True,
-            check=True,
-        )
-        url = result.stdout.strip()
-        return url if url else None
-    except subprocess.CalledProcessError:
-        return None
-
-
 _PR_INFO_FIELDS = "number,url,title,state,isDraft,mergeable,statusCheckRollup"
 
 
