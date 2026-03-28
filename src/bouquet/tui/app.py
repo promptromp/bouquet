@@ -285,10 +285,11 @@ class OrchestratorApp(App):
                 key = wt.branch
                 self._autopilot_idle_counts[key] = self._autopilot_idle_counts.get(key, 0) + 1
                 if self._autopilot_idle_counts[key] >= 5:  # ~10 seconds of IDLE
+                    # Always clear the count to prevent infinite retry on failure
+                    self._autopilot_idle_counts.pop(key, None)
                     try:
                         self.task_backend.update_status(wt.task_id, TaskStatus.DONE)
                         self._autopilot.on_task_completed(wt.task_id)
-                        self._autopilot_idle_counts.pop(key, None)
                         self.call_from_thread(
                             self.notify, f"Autopilot: task completed (worktree {wt.branch})"
                         )
@@ -311,10 +312,15 @@ class OrchestratorApp(App):
                 task_id=task.id,
                 auto_accept=True,  # Autopilot always enables auto-accept
             )
-            self.session_state.worktrees.append(placeholder)
-            self.call_from_thread(self._refresh_table)
-            self.call_from_thread(self._refresh_tasks)
-            self._pick_up_task_worker(task.id, branch)
+            # Dispatch to main thread: append placeholder and spawn worker
+            self.call_from_thread(self._autopilot_dispatch, task.id, branch, placeholder)
+
+    def _autopilot_dispatch(self, task_id: str, branch: str, placeholder: WorktreeInfo) -> None:
+        """Main-thread callback to append placeholder and spawn the pickup worker."""
+        self.session_state.worktrees.append(placeholder)
+        self._refresh_table()
+        self._refresh_tasks()
+        self._pick_up_task_worker(task_id, branch)
 
     def _update_autopilot_indicator(self) -> None:
         """Update the autopilot status indicator."""
@@ -326,6 +332,7 @@ class OrchestratorApp(App):
         """Toggle autopilot mode on/off."""
         if self._autopilot.active:
             self._autopilot.stop()
+            self._autopilot_idle_counts.clear()
             self.notify("Autopilot OFF")
         else:
             self._autopilot.start()

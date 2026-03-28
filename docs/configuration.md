@@ -54,6 +54,8 @@ install_commands = ["uv sync"]
 [task_queue]
 backend = "local"
 auto_branch_prefix = "task/"
+max_autopilot_concurrency = 3
+autopilot_auto_complete = true
 ```
 
 ## Sections
@@ -114,6 +116,8 @@ Dev servers that run alongside the agent in each worktree window.
 | `backend` | string | `"local"` (SQLite, default) or `"github"` (GitHub Issues) |
 | `label_filter` | string | For GitHub backend: only issues with this label appear as tasks (default `"bouquet"`) |
 | `auto_branch_prefix` | string | Prefix for auto-generated branch names when picking up tasks |
+| `max_autopilot_concurrency` | int | Maximum worktrees autopilot will run in parallel (default `3`) |
+| `autopilot_auto_complete` | bool | Auto-complete tasks when their worktree goes IDLE (default `true`) |
 
 ## Template Variables
 
