@@ -2,14 +2,17 @@
 
 from __future__ import annotations
 
-
-__all__ = ["AutopilotIndicator", "ProjectHeader", "TaskQueueTable", "WorktreeDetailPanel", "WorktreeTable"]
+import time
 
 from rich.text import Text
 from textual.widgets import DataTable, Static
 
+from bouquet.github import PRInfo, PRStatus
 from bouquet.models import WorktreeInfo, WorktreeStatus
 from bouquet.tasks.base import Task, TaskStatus
+
+
+__all__ = ["AutopilotIndicator", "ProjectHeader", "TaskQueueTable", "WorktreeDetailPanel", "WorktreeTable"]
 
 
 _STATUS_STYLE: dict[WorktreeStatus, str] = {
@@ -97,6 +100,17 @@ class WorktreeTable(DataTable):
             )
 
 
+_PR_STATUS_DISPLAY: dict[PRStatus, str] = {
+    PRStatus.DRAFT: "[dim]draft[/dim]",
+    PRStatus.OPEN: "[cyan]open[/cyan]",
+    PRStatus.CHECKS_FAILING: "[bold red]checks failing[/bold red]",
+    PRStatus.CHECKS_PENDING: "[yellow]checks pending[/yellow]",
+    PRStatus.READY: "[bold green]ready to merge[/bold green]",
+    PRStatus.MERGED: "[magenta]merged[/magenta]",
+    PRStatus.CLOSED: "[dim]closed[/dim]",
+}
+
+
 class WorktreeDetailPanel(Static):
     """Displays details about the currently highlighted worktree.
 
@@ -105,12 +119,14 @@ class WorktreeDetailPanel(Static):
     """
 
     _PLACEHOLDER = "[dim]Select a worktree to view details.[/dim]"
+    _PR_REFRESH_SECONDS = 30.0
 
     def __init__(self) -> None:
         super().__init__(self._PLACEHOLDER)
         self._current_branch: str | None = None
         self._current_wt: WorktreeInfo | None = None
-        self._pr_cache: dict[str, str | None] = {}
+        self._pr_cache: dict[str, PRInfo | None] = {}
+        self._pr_cache_time: dict[str, float] = {}
         self._pr_pending: set[str] = set()
         self._rows: dict[str, str] = {}
 
@@ -119,7 +135,13 @@ class WorktreeDetailPanel(Static):
         return self._current_branch
 
     def needs_pr_lookup(self, branch: str) -> bool:
-        return branch not in self._pr_cache and branch not in self._pr_pending
+        if branch in self._pr_pending:
+            return False
+        if branch not in self._pr_cache:
+            return True
+        # Re-fetch if cached data is stale (CI status may have changed)
+        cached_at = self._pr_cache_time.get(branch, 0.0)
+        return (time.monotonic() - cached_at) > self._PR_REFRESH_SECONDS
 
     def show_worktree(self, wt: WorktreeInfo | None) -> None:
         """Update the panel to show details for the given worktree."""
@@ -150,8 +172,12 @@ class WorktreeDetailPanel(Static):
         }
         # PR row
         if wt.branch in self._pr_cache:
-            pr_url = self._pr_cache[wt.branch]
-            rows["PR"] = pr_url if pr_url else "[dim]No PR[/dim]"
+            pr_info = self._pr_cache[wt.branch]
+            if pr_info:
+                status_display = _PR_STATUS_DISPLAY.get(pr_info.status, pr_info.status.value)
+                rows["PR"] = f"#{pr_info.number} {status_display}"
+            else:
+                rows["PR"] = "[dim]No PR[/dim]"
         elif wt.branch in self._pr_pending:
             rows["PR"] = "[dim]Looking up…[/dim]"
         self._rows = rows
@@ -164,9 +190,10 @@ class WorktreeDetailPanel(Static):
         if branch == self._current_branch:
             self._rebuild_rows()
 
-    def set_pr_url(self, branch: str, url: str | None) -> None:
-        """Cache a PR URL and re-render if this branch is currently shown."""
-        self._pr_cache[branch] = url
+    def set_pr_info(self, branch: str, info: PRInfo | None) -> None:
+        """Cache PR info and re-render if this branch is currently shown."""
+        self._pr_cache[branch] = info
+        self._pr_cache_time[branch] = time.monotonic()
         self._pr_pending.discard(branch)
         if branch == self._current_branch:
             self._rebuild_rows()

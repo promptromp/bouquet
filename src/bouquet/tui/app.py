@@ -21,7 +21,7 @@ from bouquet.activity import POLLABLE_STATUSES, ActivityMonitor
 from bouquet.agents.base import AgentResponse
 from bouquet.autopilot import AutopilotController
 from bouquet.config import BouquetSettings, load_config
-from bouquet.github import GitHubError, lookup_pr_url
+from bouquet.github import GitHubError, lookup_pr_info
 from bouquet.models import SessionState, WorktreeInfo, WorktreeStatus
 from bouquet.tasks import TaskQueueBackend, create_backend
 from bouquet.tasks.base import TaskStatus
@@ -402,13 +402,13 @@ class OrchestratorApp(App):
 
     @work(thread=True, group="pr-lookup")
     def _lookup_pr(self, branch: str) -> None:
-        """Look up the PR URL for a branch in the background."""
+        """Look up PR info for a branch in the background."""
         try:
-            url = lookup_pr_url(branch, cwd=Path(self.settings.project.repo_path))
+            info = lookup_pr_info(branch, cwd=Path(self.settings.project.repo_path))
         except GitHubError:
-            url = None
+            info = None
         detail = self.query_one(WorktreeDetailPanel)
-        self.call_from_thread(detail.set_pr_url, branch, url)
+        self.call_from_thread(detail.set_pr_info, branch, info)
 
     def on_data_table_row_selected(self, event: WorktreeTable.RowSelected) -> None:
         """Handle Enter on a table row — switch to that worktree's tmux window."""
