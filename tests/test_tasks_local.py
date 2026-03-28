@@ -2,6 +2,9 @@
 
 from __future__ import annotations
 
+import sqlite3
+from pathlib import Path
+
 import pytest
 
 from bouquet.tasks.base import TaskBackendError, TaskStatus
@@ -242,3 +245,40 @@ def test_get_children(local_backend: LocalBackend) -> None:
     children = local_backend.get_children(parent.id)
     assert len(children) == 2
     assert {c.id for c in children} == {child1.id, child2.id}
+
+
+def test_schema_migration_adds_parent_id(tmp_path: Path) -> None:
+    """Opening a LocalBackend against a pre-existing DB without parent_id should migrate it."""
+    db_path = str(tmp_path / "legacy.db")
+    # Create a legacy DB without parent_id column
+    conn = sqlite3.connect(db_path)
+    conn.executescript("""
+        CREATE TABLE tasks (
+            id          INTEGER PRIMARY KEY AUTOINCREMENT,
+            title       TEXT NOT NULL,
+            description TEXT NOT NULL DEFAULT '',
+            status      TEXT NOT NULL DEFAULT 'open',
+            branch      TEXT,
+            labels      TEXT NOT NULL DEFAULT '[]',
+            created_at  TEXT NOT NULL,
+            updated_at  TEXT NOT NULL
+        );
+        CREATE INDEX IF NOT EXISTS idx_tasks_status ON tasks(status);
+    """)
+    conn.execute(
+        "INSERT INTO tasks (title, created_at, updated_at) VALUES ('Old task', '2026-01-01', '2026-01-01')"
+    )
+    conn.commit()
+    conn.close()
+
+    # Opening LocalBackend should migrate without error
+    backend = LocalBackend(db_path=db_path)
+    tasks = backend.list_tasks()
+    assert len(tasks) == 1
+    assert tasks[0].title == "Old task"
+    assert tasks[0].parent_id is None
+
+    # parent_id should now work
+    parent = backend.create_task("Parent")
+    child = backend.create_task("Child", parent_id=parent.id)
+    assert child.parent_id == parent.id

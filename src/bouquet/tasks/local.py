@@ -33,14 +33,15 @@ class LocalBackend(TaskQueueBackend):
                 updated_at  TEXT NOT NULL
             );
             CREATE INDEX IF NOT EXISTS idx_tasks_status ON tasks(status);
-            CREATE INDEX IF NOT EXISTS idx_tasks_parent ON tasks(parent_id);
         """)
         # Migration: add parent_id column to existing databases
         cols = {row[1] for row in self._conn.execute("PRAGMA table_info(tasks)").fetchall()}
         if "parent_id" not in cols:
             self._conn.execute("ALTER TABLE tasks ADD COLUMN parent_id INTEGER")
-            self._conn.execute("CREATE INDEX IF NOT EXISTS idx_tasks_parent ON tasks(parent_id)")
             self._conn.commit()
+        # Create parent index after migration ensures column exists
+        self._conn.execute("CREATE INDEX IF NOT EXISTS idx_tasks_parent ON tasks(parent_id)")
+        self._conn.commit()
 
     def _row_to_task(self, row: sqlite3.Row) -> Task:
         parent_id = row["parent_id"]
