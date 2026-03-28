@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 
-__all__ = ["ProjectHeader", "TaskQueueTable", "WorktreeDetailPanel", "WorktreeTable"]
+__all__ = ["AutopilotIndicator", "ProjectHeader", "TaskQueueTable", "WorktreeDetailPanel", "WorktreeTable"]
 
 from rich.text import Text
 from textual.widgets import DataTable, Static
@@ -39,6 +39,20 @@ class ProjectHeader(Static):
     def __init__(self, project_name: str) -> None:
         super().__init__(f"[bold italic]bouquet[/bold italic] [dim]//[/dim] {project_name}")
         self.add_class("project-header")
+
+
+class AutopilotIndicator(Static):
+    """Shows autopilot status near the header."""
+
+    def __init__(self) -> None:
+        super().__init__("")
+        self.add_class("autopilot-indicator")
+
+    def update_status(self, active: bool, current: int, max_concurrent: int) -> None:
+        if active:
+            self.update(f"[bold green]AUTOPILOT[/bold green] [{current}/{max_concurrent}]")
+        else:
+            self.update("")
 
 
 class WorktreeTable(DataTable):
@@ -165,6 +179,9 @@ _TASK_STATUS_DISPLAY: dict[TaskStatus, Text] = {
 }
 
 
+_TASK_BLOCKED = Text("◌ blocked", style="dim yellow")
+
+
 class TaskQueueTable(DataTable):
     """Table for displaying queued tasks."""
 
@@ -173,19 +190,30 @@ class TaskQueueTable(DataTable):
         self.add_class("task-queue-table")
 
     def on_mount(self) -> None:
-        self.add_columns("#", "Title", "Status", "Branch", "Created")
+        self.add_columns("#", "Title", "Status", "Dep", "Branch", "Created")
 
     def refresh_tasks(self, tasks: list[Task]) -> None:
         """Clear and repopulate the table with current task data."""
         self.clear()
+        status_by_id = {t.id: t.status for t in tasks}
         for task in tasks:
             created = task.created_at.strftime("%m-%d %H:%M")
-            status = _TASK_STATUS_DISPLAY.get(task.status, Text(task.status.value))
+            # Show blocked status for OPEN tasks whose parent is not DONE
+            if (
+                task.status == TaskStatus.OPEN
+                and task.parent_id is not None
+                and status_by_id.get(task.parent_id) != TaskStatus.DONE
+            ):
+                status = _TASK_BLOCKED
+            else:
+                status = _TASK_STATUS_DISPLAY.get(task.status, Text(task.status.value))
+            dep = f"#{task.parent_id}" if task.parent_id else "-"
             branch = task.branch or "-"
             self.add_row(
                 task.id,
                 task.title,
                 status,
+                dep,
                 branch,
                 created,
                 key=task.id,

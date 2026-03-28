@@ -69,6 +69,8 @@ class TaskQueueConfig(BaseModel):
     label_filter: str = "bouquet"
     sqlite_path: str | None = None
     auto_branch_prefix: str = "task/"
+    max_autopilot_concurrency: int = 3
+    autopilot_auto_complete: bool = True
 
 
 class BouquetSettings(BaseSettings):
