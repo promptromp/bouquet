@@ -232,8 +232,8 @@ class BroadcastResultsScreen(ModalScreen[None]):
         self.dismiss(None)
 
 
-class CreateTaskScreen(ModalScreen[tuple[str, str] | None]):
-    """Modal dialog for creating a new task."""
+class CreateTaskScreen(ModalScreen[tuple[str, str, str | None] | None]):
+    """Modal dialog for creating a new task, optionally with a parent dependency."""
 
     CSS = """
     CreateTaskScreen {
@@ -256,6 +256,10 @@ class CreateTaskScreen(ModalScreen[tuple[str, str] | None]):
         margin-bottom: 1;
     }
 
+    #task-dialog Select {
+        margin-bottom: 1;
+    }
+
     .button-row {
         layout: horizontal;
         height: auto;
@@ -267,13 +271,24 @@ class CreateTaskScreen(ModalScreen[tuple[str, str] | None]):
     }
     """
 
+    def __init__(self, existing_tasks: list | None = None) -> None:
+        super().__init__()
+        self._existing_tasks = existing_tasks or []
+
     def compose(self) -> ComposeResult:
+        # Build parent options from non-DONE tasks
+        parent_options: list[tuple[str, str | None]] = [("None (no dependency)", None)]
+        for t in self._existing_tasks:
+            parent_options.append((f"#{t.id} — {t.title}", t.id))
+
         with Vertical(id="task-dialog"):
             yield Label("Create Task")
             yield Label("Title:")
             yield Input(placeholder="e.g. Fix login page bug", id="task-title-input")
             yield Label("Description (optional):")
             yield Input(placeholder="e.g. The login page crashes when...", id="task-desc-input")
+            yield Label("Depends on (optional):")
+            yield Select(parent_options, value=None, id="task-parent-select", allow_blank=False)
             with Vertical(classes="button-row"):
                 yield Button("Create", variant="primary", id="task-create-btn")
                 yield Button("Cancel", variant="default", id="task-cancel-btn")
@@ -282,8 +297,11 @@ class CreateTaskScreen(ModalScreen[tuple[str, str] | None]):
         if event.button.id == "task-create-btn":
             title = self.query_one("#task-title-input", Input).value.strip()
             description = self.query_one("#task-desc-input", Input).value.strip()
+            parent_select = self.query_one("#task-parent-select", Select)
+            raw_parent = parent_select.value
+            parent_id: str | None = raw_parent if isinstance(raw_parent, str) else None
             if title:
-                self.dismiss((title, description))
+                self.dismiss((title, description, parent_id))
             else:
                 self.query_one("#task-title-input", Input).focus()
         else:
@@ -293,7 +311,7 @@ class CreateTaskScreen(ModalScreen[tuple[str, str] | None]):
         if event.input.id == "task-title-input":
             self.query_one("#task-desc-input", Input).focus()
         elif event.input.id == "task-desc-input":
-            self.query_one("#task-create-btn", Button).press()
+            self.query_one("#task-parent-select", Select).focus()
 
 
 class CompleteTaskScreen(ModalScreen[bool | None]):

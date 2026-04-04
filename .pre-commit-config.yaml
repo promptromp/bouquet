@@ -37,7 +37,7 @@ repos:
   hooks:
   - id: pytest
     name: pytest
-    entry: uv run python -m pytest tests/
+    entry: uv run --frozen python -m pytest tests/
     language: system
     types: [python]
     pass_filenames: false

@@ -2,6 +2,9 @@
 
 from __future__ import annotations
 
+import sqlite3
+from pathlib import Path
+
 import pytest
 
 from bouquet.tasks.base import TaskBackendError, TaskStatus
@@ -169,3 +172,111 @@ def test_task_timestamps(local_backend: LocalBackend) -> None:
     old_updated = task.updated_at
     updated = local_backend.update_status(task.id, TaskStatus.IN_PROGRESS)
     assert updated.updated_at >= old_updated
+
+
+# --- Parent / dependency tests ---
+
+
+def test_create_task_with_parent(local_backend: LocalBackend) -> None:
+    parent = local_backend.create_task("Parent task")
+    child = local_backend.create_task("Child task", parent_id=parent.id)
+    assert child.parent_id == parent.id
+
+
+def test_create_task_with_nonexistent_parent(local_backend: LocalBackend) -> None:
+    with pytest.raises(TaskBackendError, match="does not exist"):
+        local_backend.create_task("Child", parent_id="999")
+
+
+def test_set_parent(local_backend: LocalBackend) -> None:
+    t1 = local_backend.create_task("Task A")
+    t2 = local_backend.create_task("Task B")
+    updated = local_backend.set_parent(t2.id, t1.id)
+    assert updated.parent_id == t1.id
+
+
+def test_set_parent_clear(local_backend: LocalBackend) -> None:
+    t1 = local_backend.create_task("Parent")
+    t2 = local_backend.create_task("Child", parent_id=t1.id)
+    assert t2.parent_id == t1.id
+    updated = local_backend.set_parent(t2.id, None)
+    assert updated.parent_id is None
+
+
+def test_set_parent_cycle_rejected(local_backend: LocalBackend) -> None:
+    t1 = local_backend.create_task("A")
+    t2 = local_backend.create_task("B", parent_id=t1.id)
+    with pytest.raises(TaskBackendError, match="cycle"):
+        local_backend.set_parent(t1.id, t2.id)
+
+
+def test_set_parent_self_cycle_rejected(local_backend: LocalBackend) -> None:
+    t1 = local_backend.create_task("Self")
+    with pytest.raises(TaskBackendError, match="cycle"):
+        local_backend.set_parent(t1.id, t1.id)
+
+
+def test_set_parent_nonexistent_parent(local_backend: LocalBackend) -> None:
+    t1 = local_backend.create_task("Task")
+    with pytest.raises(TaskBackendError, match="does not exist"):
+        local_backend.set_parent(t1.id, "999")
+
+
+def test_set_parent_nonexistent_task(local_backend: LocalBackend) -> None:
+    with pytest.raises(TaskBackendError, match="not found"):
+        local_backend.set_parent("999", "1")
+
+
+def test_delete_task_orphans_children(local_backend: LocalBackend) -> None:
+    parent = local_backend.create_task("Parent")
+    child1 = local_backend.create_task("Child 1", parent_id=parent.id)
+    child2 = local_backend.create_task("Child 2", parent_id=parent.id)
+    local_backend.delete_task(parent.id)
+    # Children should have parent_id cleared
+    assert local_backend.get_task(child1.id).parent_id is None  # type: ignore[union-attr]
+    assert local_backend.get_task(child2.id).parent_id is None  # type: ignore[union-attr]
+
+
+def test_get_children(local_backend: LocalBackend) -> None:
+    parent = local_backend.create_task("Parent")
+    child1 = local_backend.create_task("Child 1", parent_id=parent.id)
+    child2 = local_backend.create_task("Child 2", parent_id=parent.id)
+    local_backend.create_task("Unrelated")
+    children = local_backend.get_children(parent.id)
+    assert len(children) == 2
+    assert {c.id for c in children} == {child1.id, child2.id}
+
+
+def test_schema_migration_adds_parent_id(tmp_path: Path) -> None:
+    """Opening a LocalBackend against a pre-existing DB without parent_id should migrate it."""
+    db_path = str(tmp_path / "legacy.db")
+    # Create a legacy DB without parent_id column
+    conn = sqlite3.connect(db_path)
+    conn.executescript("""
+        CREATE TABLE tasks (
+            id          INTEGER PRIMARY KEY AUTOINCREMENT,
+            title       TEXT NOT NULL,
+            description TEXT NOT NULL DEFAULT '',
+            status      TEXT NOT NULL DEFAULT 'open',
+            branch      TEXT,
+            labels      TEXT NOT NULL DEFAULT '[]',
+            created_at  TEXT NOT NULL,
+            updated_at  TEXT NOT NULL
+        );
+        CREATE INDEX IF NOT EXISTS idx_tasks_status ON tasks(status);
+    """)
+    conn.execute("INSERT INTO tasks (title, created_at, updated_at) VALUES ('Old task', '2026-01-01', '2026-01-01')")
+    conn.commit()
+    conn.close()
+
+    # Opening LocalBackend should migrate without error
+    backend = LocalBackend(db_path=db_path)
+    tasks = backend.list_tasks()
+    assert len(tasks) == 1
+    assert tasks[0].title == "Old task"
+    assert tasks[0].parent_id is None
+
+    # parent_id should now work
+    parent = backend.create_task("Parent")
+    child = backend.create_task("Child", parent_id=parent.id)
+    assert child.parent_id == parent.id

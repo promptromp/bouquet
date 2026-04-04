@@ -9,8 +9,8 @@ from unittest.mock import MagicMock, patch
 import pytest
 
 from bouquet.github import GitHubError
-from bouquet.tasks.base import TaskStatus
-from bouquet.tasks.github import GitHubIssuesBackend, _strip_branch_marker
+from bouquet.tasks.base import TaskBackendError, TaskStatus
+from bouquet.tasks.github import GitHubIssuesBackend, _strip_bouquet_markers
 
 
 def _make_issue(
@@ -196,12 +196,11 @@ def test_update_status_to_in_progress(mock_run: MagicMock, mock_gh: MagicMock) -
 @patch("bouquet.tasks.github.gh_available", return_value=True)
 @patch("bouquet.tasks.github._run_gh")
 def test_update_status_with_branch(mock_run: MagicMock, mock_gh: MagicMock) -> None:
-    issue_no_branch = _make_issue(1, "Task", body="Original description")
     issue_with_branch = _make_issue(1, "Task", body="Original description\n<!-- bouquet:branch:task/1-fix -->")
     mock_run.side_effect = [
         "",  # close
         "",  # remove label
-        json.dumps(issue_no_branch),  # get_task for branch update
+        json.dumps({"body": "Original description"}),  # issue view for raw body
         "",  # edit body
         json.dumps(issue_with_branch),  # final get_task
     ]
@@ -258,11 +257,14 @@ def test_reconcile_stale(mock_run: MagicMock, mock_gh: MagicMock) -> None:
 @patch("bouquet.tasks.github.gh_available", return_value=True)
 @patch("bouquet.tasks.github._run_gh")
 def test_delete_task_closes_issue(mock_run: MagicMock, mock_gh: MagicMock) -> None:
-    mock_run.return_value = ""
+    mock_run.side_effect = [
+        json.dumps([]),  # list_tasks for get_children (no children)
+        "",  # close issue
+    ]
     backend = GitHubIssuesBackend()
 
     backend.delete_task("10")
-    mock_run.assert_called_once_with("issue", "close", "10", "--reason", "not planned")
+    assert mock_run.call_args_list[-1][0] == ("issue", "close", "10", "--reason", "not planned")
 
 
 @patch("bouquet.tasks.github.gh_available", return_value=True)
@@ -274,10 +276,12 @@ def test_list_tasks_empty(mock_run: MagicMock, mock_gh: MagicMock) -> None:
     assert backend.list_tasks() == []
 
 
-def test_strip_branch_marker() -> None:
-    assert _strip_branch_marker("Hello\n<!-- bouquet:branch:task/1 -->") == "Hello"
-    assert _strip_branch_marker("<!-- bouquet:branch:x -->") == ""
-    assert _strip_branch_marker("No marker here") == "No marker here"
+def test_strip_bouquet_markers() -> None:
+    assert _strip_bouquet_markers("Hello\n<!-- bouquet:branch:task/1 -->") == "Hello"
+    assert _strip_bouquet_markers("<!-- bouquet:branch:x -->") == ""
+    assert _strip_bouquet_markers("No marker here") == "No marker here"
+    assert _strip_bouquet_markers("Desc\n<!-- bouquet:parent:5 -->") == "Desc"
+    assert _strip_bouquet_markers("Desc\n<!-- bouquet:branch:b -->\n<!-- bouquet:parent:5 -->") == "Desc"
 
 
 @patch("bouquet.tasks.github.gh_available", return_value=True)
@@ -291,3 +295,65 @@ def test_labels_exclude_internal(mock_run: MagicMock, mock_gh: MagicMock) -> Non
     assert "bouquet" not in task.labels
     assert "in-progress" not in task.labels
     assert task.labels == ["bug", "p1"]
+
+
+@patch("bouquet.tasks.github.gh_available", return_value=True)
+@patch("bouquet.tasks.github._run_gh")
+def test_issue_to_task_extracts_parent(mock_run: MagicMock, mock_gh: MagicMock) -> None:
+    issue = _make_issue(2, "Child", body="Description\n<!-- bouquet:parent:1 -->")
+    backend = GitHubIssuesBackend()
+
+    task = backend._issue_to_task(issue)
+    assert task.parent_id == "1"
+    assert "bouquet:parent" not in task.description
+
+
+@patch("bouquet.tasks.github.gh_available", return_value=True)
+@patch("bouquet.tasks.github._run_gh")
+def test_create_task_with_parent(mock_run: MagicMock, mock_gh: MagicMock) -> None:
+    parent_issue = _make_issue(1, "Parent")
+    child_issue = _make_issue(2, "Child", body="Details\n<!-- bouquet:parent:1 -->")
+    mock_run.side_effect = [
+        json.dumps(parent_issue),  # get_task to validate parent
+        json.dumps(child_issue),  # create issue
+    ]
+    backend = GitHubIssuesBackend()
+
+    task = backend.create_task("Child", description="Details", parent_id="1")
+    assert task.parent_id == "1"
+    # Verify --body was passed with parent marker
+    create_call = mock_run.call_args_list[1][0]
+    assert "--body" in create_call
+    body_idx = list(create_call).index("--body") + 1
+    assert "<!-- bouquet:parent:1 -->" in create_call[body_idx]
+
+
+@patch("bouquet.tasks.github.gh_available", return_value=True)
+@patch("bouquet.tasks.github._run_gh")
+def test_create_task_with_nonexistent_parent(mock_run: MagicMock, mock_gh: MagicMock) -> None:
+    mock_run.side_effect = subprocess.CalledProcessError(1, "gh")  # get_task returns None
+    backend = GitHubIssuesBackend()
+
+    with pytest.raises(TaskBackendError, match="does not exist"):
+        backend.create_task("Child", parent_id="999")
+
+
+@patch("bouquet.tasks.github.gh_available", return_value=True)
+@patch("bouquet.tasks.github._run_gh")
+def test_delete_task_orphans_children(mock_run: MagicMock, mock_gh: MagicMock) -> None:
+    """Deleting a parent should remove parent marker from children."""
+    child_issue = _make_issue(2, "Child", body="Desc\n<!-- bouquet:parent:1 -->")
+    mock_run.side_effect = [
+        json.dumps([child_issue]),  # list_tasks for get_children
+        json.dumps(child_issue),  # get_task for child
+        json.dumps({"body": "Desc\n<!-- bouquet:parent:1 -->"}),  # view child raw body
+        "",  # edit child to remove parent marker
+        "",  # close parent issue
+    ]
+    backend = GitHubIssuesBackend()
+
+    backend.delete_task("1")
+    # Verify child body was edited to remove parent marker
+    edit_call = mock_run.call_args_list[3][0]
+    assert "edit" in edit_call
+    assert "2" in edit_call  # child ID

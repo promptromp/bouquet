@@ -6,6 +6,7 @@ from datetime import datetime
 from pathlib import Path
 from unittest.mock import MagicMock
 
+from bouquet.github import PRInfo, PRStatus
 from bouquet.models import SessionState, WorktreeInfo, WorktreeStatus
 from bouquet.tasks.base import Task, TaskStatus
 from bouquet.tui.app import (
@@ -109,8 +110,8 @@ def test_detail_panel_show_none() -> None:
     assert panel._rows == {}
 
 
-def test_detail_panel_pr_cache_with_url() -> None:
-    """PR URL is cached and shown when set."""
+def test_detail_panel_pr_cache_with_info() -> None:
+    """PR info is cached and shown when set."""
     panel = WorktreeDetailPanel()
     wt = WorktreeInfo(
         branch="feature/auth",
@@ -119,8 +120,10 @@ def test_detail_panel_pr_cache_with_url() -> None:
         created_at=datetime(2026, 3, 18, 10, 0),
     )
     panel.show_worktree(wt)
-    panel.set_pr_url("feature/auth", "https://github.com/org/repo/pull/42")
-    assert panel._rows["PR"] == "https://github.com/org/repo/pull/42"
+    pr_info = PRInfo(number=42, url="https://github.com/org/repo/pull/42", title="Auth", status=PRStatus.READY)
+    panel.set_pr_info("feature/auth", pr_info)
+    assert "#42" in panel._rows["PR"]
+    assert "ready" in panel._rows["PR"]
 
 
 def test_detail_panel_pr_cache_none() -> None:
@@ -133,7 +136,7 @@ def test_detail_panel_pr_cache_none() -> None:
         created_at=datetime(2026, 3, 18, 10, 0),
     )
     panel.show_worktree(wt)
-    panel.set_pr_url("feature/no-pr", None)
+    panel.set_pr_info("feature/no-pr", None)
     assert "No PR" in panel._rows["PR"]
 
 
@@ -172,8 +175,8 @@ def test_detail_panel_rows_contain_all_fields() -> None:
     assert "off" in panel._rows["Accept"]
 
 
-def test_detail_panel_set_pr_url_other_branch() -> None:
-    """Setting PR URL for a non-current branch caches but doesn't change rows."""
+def test_detail_panel_set_pr_info_other_branch() -> None:
+    """Setting PR info for a non-current branch caches but doesn't change rows."""
     panel = WorktreeDetailPanel()
     wt = WorktreeInfo(
         branch="feature/current",
@@ -182,8 +185,9 @@ def test_detail_panel_set_pr_url_other_branch() -> None:
         created_at=datetime(2026, 1, 1, 12, 0),
     )
     panel.show_worktree(wt)
-    panel.set_pr_url("feature/other", "https://github.com/org/repo/pull/99")
-    assert panel._pr_cache["feature/other"] == "https://github.com/org/repo/pull/99"
+    pr_info = PRInfo(number=99, url="https://github.com/org/repo/pull/99", title="Other", status=PRStatus.OPEN)
+    panel.set_pr_info("feature/other", pr_info)
+    assert panel._pr_cache["feature/other"] == pr_info
     assert "PR" not in panel._rows
 
 

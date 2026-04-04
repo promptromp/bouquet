@@ -25,6 +25,7 @@ class Task(BaseModel):
     description: str = ""
     status: TaskStatus = TaskStatus.OPEN
     branch: str | None = None
+    parent_id: str | None = None
     labels: list[str] = Field(default_factory=list)
     source: str = "local"
     url: str | None = None
@@ -44,8 +45,14 @@ class TaskQueueBackend(ABC):
         """Get a single task by ID."""
 
     @abstractmethod
-    def create_task(self, title: str, description: str = "", labels: list[str] | None = None) -> Task:
-        """Create a new task."""
+    def create_task(
+        self,
+        title: str,
+        description: str = "",
+        labels: list[str] | None = None,
+        parent_id: str | None = None,
+    ) -> Task:
+        """Create a new task, optionally with a parent dependency."""
 
     @abstractmethod
     def update_status(self, task_id: str, status: TaskStatus, branch: str | None = None) -> Task:
@@ -53,7 +60,19 @@ class TaskQueueBackend(ABC):
 
     @abstractmethod
     def delete_task(self, task_id: str) -> None:
-        """Delete a task."""
+        """Delete a task. Implementations must orphan children (set parent_id to None)."""
+
+    @abstractmethod
+    def set_parent(self, task_id: str, parent_id: str | None) -> Task:
+        """Set or clear the parent of a task.
+
+        Raises TaskBackendError if the parent does not exist or if the
+        operation would create a cycle.
+        """
+
+    def get_children(self, parent_id: str) -> list[Task]:
+        """Return all tasks whose parent_id matches."""
+        return [t for t in self.list_tasks() if t.parent_id == parent_id]
 
     def reconcile_stale(self, active_branches: set[str]) -> list[Task]:
         """Reset IN_PROGRESS tasks whose branches are not in active_branches back to OPEN.

@@ -91,7 +91,8 @@ bouquet start my-project --repo /path/to/repo --config /path/to/.bouquet.toml
 | `N` | Create a new worktree (opens branch dialog with optional agent profile selector) |
 | `S` / `Enter` | Switch to the selected worktree's window |
 | `D` | Delete the selected worktree and its window |
-| `A` | Toggle auto-accept for selected worktree (auto-sends "y" at permission prompts) |
+| `a` | Toggle auto-accept for selected worktree (auto-sends "y" at permission prompts) |
+| `A` | Toggle autopilot mode (auto-schedules tasks by dependency order) |
 | `P` | Send a prompt to selected or all agent terminal(s) via tmux send-keys |
 | `T` | Request a status summary from all agents (captures responses) |
 | `C` | Create a new task in the task queue |
@@ -219,10 +220,30 @@ auto_branch_prefix = "task/"
 
 ### Task workflow
 
-1. **Create** (`c`) — opens a dialog to create a task (or create a GitHub issue with the `bouquet` label)
+1. **Create** (`c`) — opens a dialog to create a task with an optional parent dependency
 2. **Pick up** (`x`) — creates a worktree from the task, marks it in-progress, and sends the task description to the agent
 3. **Complete** (`m`) — marks the task as done, optionally removes the associated worktree
 4. **Reconciliation** — on startup, tasks stuck as in-progress (from a crash or quit) are automatically reset to open if their worktree no longer exists
+
+### Task Dependencies
+
+Tasks can declare a parent dependency, forming a DAG. A task with an unsatisfied dependency shows as **blocked** in the queue and cannot be picked up until its parent is done. Cycles are rejected at creation time.
+
+### Autopilot
+
+Press `A` to toggle autopilot mode. When active, bouquet automatically:
+
+- Picks up tasks whose dependencies are satisfied (or have none)
+- Runs up to `max_autopilot_concurrency` tasks in parallel (default 3)
+- Enables auto-accept on all autopilot-created worktrees
+- Auto-completes tasks when their agent goes idle (~10 seconds)
+- Cascades: completing a parent unblocks its children for the next scheduling cycle
+
+```toml
+[task_queue]
+max_autopilot_concurrency = 3    # max parallel worktrees
+autopilot_auto_complete = true   # auto-complete IDLE tasks
+```
 
 ---
 

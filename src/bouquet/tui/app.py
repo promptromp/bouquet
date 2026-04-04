@@ -19,8 +19,9 @@ from textual.widgets import Footer, Static
 
 from bouquet.activity import POLLABLE_STATUSES, ActivityMonitor
 from bouquet.agents.base import AgentResponse
+from bouquet.autopilot import AutopilotController
 from bouquet.config import BouquetSettings, load_config
-from bouquet.github import GitHubError, lookup_pr_url
+from bouquet.github import GitHubError, lookup_pr_info
 from bouquet.models import SessionState, WorktreeInfo, WorktreeStatus
 from bouquet.tasks import TaskQueueBackend, create_backend
 from bouquet.tasks.base import TaskStatus
@@ -33,7 +34,7 @@ from bouquet.tui.screens import (
     NewWorktreeScreen,
     SendPromptScreen,
 )
-from bouquet.tui.widgets import ProjectHeader, TaskQueueTable, WorktreeDetailPanel, WorktreeTable
+from bouquet.tui.widgets import AutopilotIndicator, ProjectHeader, TaskQueueTable, WorktreeDetailPanel, WorktreeTable
 from bouquet.worktree import WorktreeManager, sanitize_branch_name
 
 
@@ -99,6 +100,7 @@ class OrchestratorApp(App):
         Binding("x", "pick_up_task", "Pick up task"),
         Binding("m", "complete_task", "Complete task"),
         Binding("backspace", "delete_task", "Delete task"),
+        Binding("A", "toggle_autopilot", "Autopilot"),
         Binding("r", "refresh", "Refresh"),
         Binding("q", "quit", "Quit"),
     ]
@@ -119,9 +121,16 @@ class OrchestratorApp(App):
         self._polling = False
         self._send_to_all = False
         self._recently_accepted: set[str] = set()
+        self._autopilot = AutopilotController(
+            backend=self.task_backend,
+            max_concurrency=settings.task_queue.max_autopilot_concurrency,
+            auto_branch_prefix=settings.task_queue.auto_branch_prefix,
+        )
+        self._autopilot_idle_counts: dict[str, int] = {}
 
     def compose(self) -> ComposeResult:
         yield ProjectHeader(self.settings.project.name)
+        yield AutopilotIndicator()
         with Horizontal(id="body"):
             with Vertical(id="left-panel"):
                 yield Static("Worktrees", id="section-title")
@@ -199,9 +208,18 @@ class OrchestratorApp(App):
         table.display = bool(worktrees)
         # Re-render detail panel for the currently selected branch
         detail = self.query_one(WorktreeDetailPanel)
-        if detail.current_branch:
-            wt = next((w for w in worktrees if w.branch == detail.current_branch), None)
+        branch = detail.current_branch
+        # If no branch is selected yet but we have worktrees, show the first one
+        if not branch and worktrees:
+            branch = worktrees[0].branch
+        if branch:
+            wt = next((w for w in worktrees if w.branch == branch), None)
             detail.show_worktree(wt)
+            # Trigger PR lookup if not yet cached (row_highlighted may not
+            # re-fire after clear+re-add when the cursor stays at row 0)
+            if wt and detail.needs_pr_lookup(branch):
+                detail.mark_pr_pending(branch)
+                self._lookup_pr(branch)
 
     def _sendable_worktrees(self) -> list[WorktreeInfo]:
         """Return worktrees that have a tmux window and are in a pollable state."""
@@ -257,10 +275,77 @@ class OrchestratorApp(App):
                             pass
                     elif new_status != WorktreeStatus.WAITING and guard_key in self._recently_accepted:
                         self._recently_accepted.discard(guard_key)
+            # Autopilot: auto-complete IDLE tasks and schedule new ones
+            if self._autopilot.active:
+                self._autopilot_check_completions()
+                self._autopilot_schedule()
+                changed = True  # Always refresh when autopilot is active
             if changed:
                 self.call_from_thread(self._refresh_table)
         finally:
             self._polling = False
+
+    def _autopilot_check_completions(self) -> None:
+        """Auto-complete task worktrees that have been IDLE long enough."""
+        if not self.settings.task_queue.autopilot_auto_complete:
+            return
+        for wt in self.session_state.worktrees:
+            if wt.task_id and wt.status == WorktreeStatus.IDLE:
+                key = wt.branch
+                self._autopilot_idle_counts[key] = self._autopilot_idle_counts.get(key, 0) + 1
+                if self._autopilot_idle_counts[key] >= 5:  # ~10 seconds of IDLE
+                    # Always clear the count to prevent infinite retry on failure
+                    self._autopilot_idle_counts.pop(key, None)
+                    try:
+                        self.task_backend.update_status(wt.task_id, TaskStatus.DONE)
+                        self._autopilot.on_task_completed(wt.task_id)
+                        wt.task_id = None  # Free the concurrency slot
+                        self.call_from_thread(self.notify, f"Autopilot: task completed (worktree {wt.branch})")
+                        self.call_from_thread(self._refresh_tasks)
+                    except Exception:
+                        pass
+            elif wt.task_id:
+                self._autopilot_idle_counts.pop(wt.branch, None)
+
+    def _autopilot_schedule(self) -> None:
+        """Pick up ready tasks via the autopilot controller."""
+        to_pick_up = self._autopilot.tick(self.session_state)
+        for task in to_pick_up:
+            sanitized = sanitize_branch_name(task.title)
+            branch = f"{self.settings.task_queue.auto_branch_prefix}{task.id}-{sanitized}"
+            placeholder = WorktreeInfo(
+                branch=branch,
+                path=Path("."),
+                status=WorktreeStatus.CREATING,
+                task_id=task.id,
+                auto_accept=True,  # Autopilot always enables auto-accept
+            )
+            # Dispatch to main thread: append placeholder and spawn worker
+            self.call_from_thread(self._autopilot_dispatch, task.id, branch, placeholder)
+
+    def _autopilot_dispatch(self, task_id: str, branch: str, placeholder: WorktreeInfo) -> None:
+        """Main-thread callback to append placeholder and spawn the pickup worker."""
+        self.session_state.worktrees.append(placeholder)
+        self._refresh_table()
+        self._refresh_tasks()
+        self._pick_up_task_worker(task_id, branch)
+
+    def _update_autopilot_indicator(self) -> None:
+        """Update the autopilot status indicator."""
+        indicator = self.query_one(AutopilotIndicator)
+        active_count = sum(1 for wt in self.session_state.worktrees if wt.task_id is not None)
+        indicator.update_status(self._autopilot.active, active_count, self._autopilot.max_concurrency)
+
+    def action_toggle_autopilot(self) -> None:
+        """Toggle autopilot mode on/off."""
+        if self._autopilot.active:
+            self._autopilot.stop()
+            self._autopilot_idle_counts.clear()
+            self.notify("Autopilot OFF")
+        else:
+            self._autopilot.start()
+            self.notify("Autopilot ON — scheduling tasks automatically")
+        self._update_autopilot_indicator()
 
     # --- Worktree CRUD ---
 
@@ -318,13 +403,13 @@ class OrchestratorApp(App):
 
     @work(thread=True, group="pr-lookup")
     def _lookup_pr(self, branch: str) -> None:
-        """Look up the PR URL for a branch in the background."""
+        """Look up PR info for a branch in the background."""
         try:
-            url = lookup_pr_url(branch, cwd=Path(self.settings.project.repo_path))
+            info = lookup_pr_info(branch, cwd=Path(self.settings.project.repo_path))
         except GitHubError:
-            url = None
+            info = None
         detail = self.query_one(WorktreeDetailPanel)
-        self.call_from_thread(detail.set_pr_url, branch, url)
+        self.call_from_thread(detail.set_pr_info, branch, info)
 
     def on_data_table_row_selected(self, event: WorktreeTable.RowSelected) -> None:
         """Handle Enter on a table row — switch to that worktree's tmux window."""
@@ -558,18 +643,19 @@ class OrchestratorApp(App):
 
     def action_create_task(self) -> None:
         """Open the create task dialog."""
+        existing_tasks = [t for t in self.task_backend.list_tasks() if t.status != TaskStatus.DONE]
 
-        def on_result(result: tuple[str, str] | None) -> None:
+        def on_result(result: tuple[str, str, str | None] | None) -> None:
             if result is not None:
-                title, description = result
-                self._create_task_worker(title, description)
+                title, description, parent_id = result
+                self._create_task_worker(title, description, parent_id)
 
-        self.push_screen(CreateTaskScreen(), callback=on_result)
+        self.push_screen(CreateTaskScreen(existing_tasks=existing_tasks), callback=on_result)
 
     @work(thread=True)
-    def _create_task_worker(self, title: str, description: str) -> None:
+    def _create_task_worker(self, title: str, description: str, parent_id: str | None = None) -> None:
         try:
-            self.task_backend.create_task(title, description)
+            self.task_backend.create_task(title, description, parent_id=parent_id)
             self.call_from_thread(self._refresh_tasks)
             self.call_from_thread(self.notify, f"Task '{title}' created")
         except Exception as e:
@@ -662,6 +748,7 @@ class OrchestratorApp(App):
                 self.call_from_thread(self.notify, f"Task {task_id} not found", severity="error")
                 return
             self.task_backend.update_status(task_id, TaskStatus.DONE)
+            self._autopilot.on_task_completed(task_id)
             self.call_from_thread(self._refresh_tasks)
 
             if remove_worktree and branch:

@@ -5,6 +5,7 @@ from __future__ import annotations
 from typing import TYPE_CHECKING
 
 from bouquet.tasks.base import Task, TaskBackendError, TaskQueueBackend, TaskStatus
+from bouquet.tasks.dag import detect_cycle, get_ready_tasks, topo_sort
 
 
 if TYPE_CHECKING:
@@ -25,4 +26,13 @@ def create_backend(config: TaskQueueConfig, project_name: str) -> TaskQueueBacke
     return LocalBackend(db_path=db_path)
 
 
-__all__ = ["Task", "TaskBackendError", "TaskQueueBackend", "TaskStatus", "create_backend"]
+__all__ = [
+    "Task",
+    "TaskBackendError",
+    "TaskQueueBackend",
+    "TaskStatus",
+    "create_backend",
+    "detect_cycle",
+    "get_ready_tasks",
+    "topo_sort",
+]
