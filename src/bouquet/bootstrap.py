@@ -12,6 +12,7 @@ import tempfile
 from pathlib import Path
 
 from bouquet.config import BootstrapConfig
+from bouquet.template import render_template
 
 
 def _copy_file(src: Path, dst: Path) -> None:
@@ -69,34 +70,39 @@ def _direnv_allow(worktree_path: Path) -> None:
         )
 
 
-def _run_setup_and_capture_env(commands: list[str], cwd: Path) -> dict[str, str]:
+def _run_setup_and_capture_env(
+    commands: list[str],
+    cwd: Path,
+    template_vars: dict[str, object] | None = None,
+) -> dict[str, str]:
     """Run setup commands in a single bash shell and return the environment delta.
 
-    Executes all *commands* sequentially in one ``bash -c`` invocation so that
-    ``export`` statements in earlier commands are visible to later ones.  After
-    all commands finish, the resulting environment is dumped to a temp file as
-    JSON (via a ``python3`` one-liner) and diffed against the current process
-    environment.
+    *template_vars* are rendered into ``{{ ... }}`` placeholders inside each
+    command string AND exported into the bash subprocess's environment so
+    plain ``$VAR`` references work too.  This lets setup_commands reference
+    ``BOUQUET_WORKTREE_INDEX`` etc. either via templating or via shell vars.
 
-    Returns only those variables that were **added** or **changed** by the
-    commands.
+    See module docstring for the env-delta dump mechanism.
     """
+    template_vars = template_vars or {}
+    rendered = [render_template(cmd, template_vars) for cmd in commands]
+
     fd, env_path = tempfile.mkstemp(prefix="bouquet-env-", suffix=".json")
     os.close(fd)
 
     try:
-        # Use python3 to dump the resulting env as JSON — portable across
-        # macOS and Linux (macOS `env` doesn't support `-0`).
         env_dump = f"python3 -c \"import json,os; json.dump(dict(os.environ), open('{env_path}', 'w'))\""
-        # Chain user commands with && (each depends on prior success), but
-        # always run the env dump via ; so we capture whatever was exported
-        # even if a later command (e.g. `aws codeartifact login`) fails.
-        script = " && ".join(commands) + "; " + env_dump
+        script = " && ".join(rendered) + "; " + env_dump
+
+        # Build env: parent env + BOUQUET_* template vars (stringified).
+        subproc_env = {**os.environ, **{k: str(v) for k, v in template_vars.items()}}
+
         subprocess.run(
             ["bash", "-c", script],
             cwd=cwd,
             capture_output=True,
             check=False,
+            env=subproc_env,
         )
 
         try:
@@ -105,6 +111,8 @@ def _run_setup_and_capture_env(commands: list[str], cwd: Path) -> dict[str, str]
         except json.JSONDecodeError, FileNotFoundError, OSError:
             return {}
 
+        # Diff against the *original* parent env (not subproc_env), so the
+        # template vars themselves don't show up as a "delta".
         current = dict(os.environ)
         return {k: v for k, v in result_env.items() if current.get(k) != v}
     finally:
@@ -117,6 +125,7 @@ def bootstrap_worktree(
     config: BootstrapConfig,
     python: bool = True,
     javascript: bool = False,
+    template_vars: dict[str, object] | None = None,
 ) -> dict[str, str]:
     """Bootstrap a newly created worktree.
 
@@ -128,6 +137,10 @@ def bootstrap_worktree(
     4. Pin Python version if configured
     5. Run dependency install commands (with setup env applied)
     6. Allow direnv if configured
+
+    *template_vars* (e.g. ``BOUQUET_WORKTREE_INDEX``) are forwarded to
+    :func:`_run_setup_and_capture_env` so setup_commands can reference them
+    as shell env vars or ``{{ ... }}`` template placeholders.
 
     Returns a dict of environment variables that were added or changed by
     the setup commands (empty dict if none).
@@ -149,7 +162,11 @@ def bootstrap_worktree(
     # 3. Run setup commands and capture env delta
     env_delta: dict[str, str] = {}
     if config.setup_commands:
-        env_delta = _run_setup_and_capture_env(config.setup_commands, worktree_path)
+        env_delta = _run_setup_and_capture_env(
+            config.setup_commands,
+            worktree_path,
+            template_vars=template_vars,
+        )
 
     # Build env for deps commands: current env + setup delta
     deps_env = {**os.environ, **env_delta} if env_delta else None
