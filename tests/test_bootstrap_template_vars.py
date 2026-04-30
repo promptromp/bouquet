@@ -45,3 +45,17 @@ def test_setup_commands_render_template_placeholders(tmp_path: Path) -> None:
     _run_setup_and_capture_env(commands, cwd=tmp_path, template_vars=template_vars)
 
     assert marker.read_text().splitlines() == ["3", "8003"]
+
+
+def test_template_vars_do_not_appear_in_env_delta(tmp_path: Path) -> None:
+    """BOUQUET_* template vars injected for the shell must not pollute the returned delta."""
+    template_vars = {
+        "BOUQUET_WORKTREE_INDEX": 5,
+        "BOUQUET_WORKTREE_BRANCH": "feature/x",
+        "BOUQUET_WORKTREE_PATH": str(tmp_path),
+        "BOUQUET_PROJECT_NAME": "myproject",
+    }
+    # The shell does nothing user-visible -> delta should be empty.
+    delta = _run_setup_and_capture_env(["true"], cwd=tmp_path, template_vars=template_vars)
+    for key in template_vars:
+        assert key not in delta, f"{key} leaked into env delta"

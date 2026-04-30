@@ -77,12 +77,17 @@ def _run_setup_and_capture_env(
 ) -> dict[str, str]:
     """Run setup commands in a single bash shell and return the environment delta.
 
+    Executes all *commands* sequentially in one ``bash -c`` invocation so that
+    ``export`` statements in earlier commands are visible to later ones.  After
+    all commands finish, the resulting environment is dumped to a temp file as
+    JSON (via a ``python3`` one-liner) and diffed against the env the
+    subprocess started with.  Returns only those variables that were **added**
+    or **changed** by the commands.
+
     *template_vars* are rendered into ``{{ ... }}`` placeholders inside each
     command string AND exported into the bash subprocess's environment so
     plain ``$VAR`` references work too.  This lets setup_commands reference
     ``BOUQUET_WORKTREE_INDEX`` etc. either via templating or via shell vars.
-
-    See module docstring for the env-delta dump mechanism.
     """
     template_vars = template_vars or {}
     rendered = [render_template(cmd, template_vars) for cmd in commands]
@@ -111,10 +116,11 @@ def _run_setup_and_capture_env(
         except (json.JSONDecodeError, FileNotFoundError, OSError):
             return {}
 
-        # Diff against the *original* parent env (not subproc_env), so the
-        # template vars themselves don't show up as a "delta".
-        current = dict(os.environ)
-        return {k: v for k, v in result_env.items() if current.get(k) != v}
+        # Diff against the env the subprocess actually started with.  This
+        # naturally excludes the injected BOUQUET_* template vars (they
+        # cancel out in the diff) — only changes the user's commands made
+        # remain.
+        return {k: v for k, v in result_env.items() if subproc_env.get(k) != v}
     finally:
         Path(env_path).unlink(missing_ok=True)
 

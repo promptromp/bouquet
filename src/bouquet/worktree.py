@@ -84,8 +84,8 @@ class WorktreeManager:
         wt_path = info.path
 
         # 1. Bootstrap the worktree (returns env delta from setup_commands).
-        # Template vars must be built BEFORE bootstrap so setup_commands can
-        # see them (used by services later via _build_template_variables).
+        # Build template vars once; forwarded to bootstrap (for setup_commands)
+        # and reused directly by service panes below.
         tpl_vars = self._build_template_variables(info)
         env_delta = bootstrap_worktree(
             repo_path=self.repo_path,
