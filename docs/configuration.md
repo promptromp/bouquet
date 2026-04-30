@@ -104,7 +104,7 @@ Dev servers that run alongside the agent in each worktree window.
 | Key | Type | Description |
 |-----|------|-------------|
 | `python_version` | string | Runs `uv python pin <version>` before dependency installation |
-| `setup_commands` | list | Shell commands run before dependency installation. Exported env vars are captured and propagated. |
+| `setup_commands` | list | Shell commands run before dependency installation. Each command supports `{{ … }}` template expressions and the same template vars are also exported as shell env vars (e.g. `$BOUQUET_WORKTREE_INDEX`). Env vars exported by the commands themselves are captured and propagated. |
 | `copy_env_files` | list | Files copied from the main repo to the worktree (e.g. `.env`) |
 | `cow_clone_dirs` | list | Directories cloned via Copy-on-Write (APFS) instead of full copy |
 | `install_commands` | list | Dependency install commands (e.g. `uv sync`, `pnpm install`) |
@@ -121,7 +121,12 @@ Dev servers that run alongside the agent in each worktree window.
 
 ## Template Variables
 
-Template expressions use `{{ expr }}` syntax with arithmetic support.
+Template expressions use `{{ expr }}` syntax with arithmetic support. They are available in:
+
+- `[[services]].command` strings
+- `[bootstrap].setup_commands` strings
+
+In `setup_commands`, the same variables are additionally exported into the bash subprocess as plain shell env vars (e.g. `$BOUQUET_WORKTREE_INDEX`), so you can use either form depending on what reads more naturally for your script.
 
 | Variable | Type | Example |
 |----------|------|---------|
@@ -130,4 +135,18 @@ Template expressions use `{{ expr }}` syntax with arithmetic support.
 | `BOUQUET_WORKTREE_PATH` | str | `/path/to/.bouquet-worktrees/feature-auth` |
 | `BOUQUET_PROJECT_NAME` | str | `my-project` |
 
-Example: `{{ 8000 + BOUQUET_WORKTREE_INDEX }}` → `8001` for worktree index 1.
+Examples:
+
+```toml
+[[services]]
+name = "api"
+command = "uv run uvicorn app.main:app --port {{ 8000 + BOUQUET_WORKTREE_INDEX }}"
+
+[bootstrap]
+setup_commands = [
+    # Template form:
+    "bash scripts/provision-worktree.sh {{ BOUQUET_WORKTREE_INDEX }}",
+    # Shell-var form (equivalent):
+    'echo "Worktree $BOUQUET_WORKTREE_INDEX on $BOUQUET_WORKTREE_BRANCH"',
+]
+```

@@ -150,6 +150,8 @@ Each worktree gets a unique index (1, 2, 3, ...) so services bind to different p
 
 Arithmetic supported: `{{ 8000 + BOUQUET_WORKTREE_INDEX }}` → `8001`.
 
+The same template variables are also available in `[bootstrap] setup_commands` — both as `{{ … }}` placeholders and as plain shell env vars (`$BOUQUET_WORKTREE_INDEX`, etc.) — so setup scripts can provision per-worktree resources (databases, queues, …) without external coordination.
+
 No services defined = single pane with just the agent (backward compatible).
 
 ---
