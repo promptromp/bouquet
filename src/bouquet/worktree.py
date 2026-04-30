@@ -83,13 +83,17 @@ class WorktreeManager:
         """
         wt_path = info.path
 
-        # 1. Bootstrap the worktree (returns env delta from setup_commands)
+        # 1. Bootstrap the worktree (returns env delta from setup_commands).
+        # Template vars must be built BEFORE bootstrap so setup_commands can
+        # see them (used by services later via _build_template_variables).
+        tpl_vars = self._build_template_variables(info)
         env_delta = bootstrap_worktree(
             repo_path=self.repo_path,
             worktree_path=wt_path,
             config=self.settings.bootstrap,
             python=self.settings.project.languages.python,
             javascript=self.settings.project.languages.javascript,
+            template_vars=tpl_vars,
         )
 
         # 2. Apply setup env vars to tmux session so service panes inherit them
@@ -112,7 +116,6 @@ class WorktreeManager:
         # 4. Set up service panes (if any)
         services = self.settings.services
         if services:
-            tpl_vars = self._build_template_variables(info)
             rendered_cmds = [render_template(svc.command, tpl_vars) for svc in services]
             self.tmux.setup_service_panes(
                 window=window,
