@@ -4,7 +4,16 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from bouquet.bootstrap import _copy_file, _cow_clone, _direnv_allow, _run_setup_and_capture_env, bootstrap_worktree
+import pytest
+
+from bouquet.bootstrap import (
+    SetupCommandsError,
+    _copy_file,
+    _cow_clone,
+    _direnv_allow,
+    _run_setup_and_capture_env,
+    bootstrap_worktree,
+)
 from bouquet.config import BootstrapConfig
 
 
@@ -42,13 +51,18 @@ def test_run_setup_propagates_between_commands(tmp_path: Path) -> None:
     assert delta.get("BOUQUET_DERIVED") == "hello_world"
 
 
-def test_run_setup_still_captures_env_on_partial_failure(tmp_path: Path) -> None:
-    """Env dump runs even if a later command fails, capturing earlier exports."""
-    delta = _run_setup_and_capture_env(
-        ["export BOUQUET_BEFORE_FAIL=yes", "false"],
-        tmp_path,
-    )
-    assert delta.get("BOUQUET_BEFORE_FAIL") == "yes"
+def test_run_setup_raises_on_partial_failure(tmp_path: Path) -> None:
+    """A non-zero exit from any command must raise SetupCommandsError.
+
+    Previously the helper silently returned a partial env_delta on failure,
+    which masked broken setup_commands and left worktrees in an
+    inconsistent state.  Failing loudly is the correct contract.
+    """
+    with pytest.raises(SetupCommandsError):
+        _run_setup_and_capture_env(
+            ["export BOUQUET_BEFORE_FAIL=yes", "false"],
+            tmp_path,
+        )
 
 
 def test_run_setup_excludes_unchanged_vars(tmp_path: Path) -> None:

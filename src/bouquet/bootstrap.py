@@ -8,11 +8,20 @@ import os
 import platform
 import shutil
 import subprocess
+import sys
 import tempfile
 from pathlib import Path
 
 from bouquet.config import BootstrapConfig
 from bouquet.template import render_template
+
+
+class SetupCommandsError(RuntimeError):
+    """Raised when one of ``BootstrapConfig.setup_commands`` exits non-zero.
+
+    The bash subprocess's captured stdout and stderr are dumped to bouquet's
+    own stderr before this is raised so the user can see what failed.
+    """
 
 
 def _copy_file(src: Path, dst: Path) -> None:
@@ -88,6 +97,11 @@ def _run_setup_and_capture_env(
     command string AND exported into the bash subprocess's environment so
     plain ``$VAR`` references work too.  This lets setup_commands reference
     ``BOUQUET_WORKTREE_INDEX`` etc. either via templating or via shell vars.
+
+    If any command exits non-zero, the captured stdout and stderr are dumped
+    to bouquet's own stderr and :class:`SetupCommandsError` is raised so the
+    caller can mark the worktree as ERROR rather than continuing with a
+    partially-bootstrapped state.
     """
     template_vars = template_vars or {}
     rendered = [render_template(cmd, template_vars) for cmd in commands]
@@ -97,18 +111,40 @@ def _run_setup_and_capture_env(
 
     try:
         env_dump = f"python3 -c \"import json,os; json.dump(dict(os.environ), open('{env_path}', 'w'))\""
-        script = " && ".join(rendered) + "; " + env_dump
+        # Run user commands chained with && so the first failure short-circuits.
+        # Capture their exit code BEFORE the env dump so we can both:
+        #   (a) preserve whatever env vars they did export (best-effort)
+        #   (b) propagate the user-commands' failure as the bash subprocess's exit code
+        # so the Python caller can detect failure and raise.
+        user_script = " && ".join(rendered)
+        full_script = f"{user_script}\n_BOUQUET_USER_RC=$?\n{env_dump}\nexit $_BOUQUET_USER_RC\n"
 
         # Build env: parent env + BOUQUET_* template vars (stringified).
         subproc_env = {**os.environ, **{k: str(v) for k, v in template_vars.items()}}
 
-        subprocess.run(
-            ["bash", "-c", script],
+        result = subprocess.run(
+            ["bash", "-c", full_script],
             cwd=cwd,
             capture_output=True,
             check=False,
             env=subproc_env,
         )
+
+        if result.returncode != 0:
+            stdout = result.stdout.decode(errors="replace") if result.stdout else ""
+            stderr = result.stderr.decode(errors="replace") if result.stderr else ""
+            sys.stderr.write(f"\n[bouquet] setup_commands failed (exit {result.returncode}) in {cwd}\n")
+            if stdout:
+                sys.stderr.write(f"--- setup_commands stdout ---\n{stdout}")
+                if not stdout.endswith("\n"):
+                    sys.stderr.write("\n")
+            if stderr:
+                sys.stderr.write(f"--- setup_commands stderr ---\n{stderr}")
+                if not stderr.endswith("\n"):
+                    sys.stderr.write("\n")
+            sys.stderr.write("[bouquet] worktree bootstrap aborted\n\n")
+            sys.stderr.flush()
+            raise SetupCommandsError(f"setup_commands failed with exit code {result.returncode}")
 
         try:
             with open(env_path) as f:

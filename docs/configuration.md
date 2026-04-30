@@ -104,7 +104,7 @@ Dev servers that run alongside the agent in each worktree window.
 | Key | Type | Description |
 |-----|------|-------------|
 | `python_version` | string | Runs `uv python pin <version>` before dependency installation |
-| `setup_commands` | list | Shell commands run before dependency installation. Each command supports `{{ … }}` template expressions and the same template vars are also exported as shell env vars (e.g. `$BOUQUET_WORKTREE_INDEX`). Env vars exported by the commands themselves are captured and propagated. |
+| `setup_commands` | list | Shell commands run before dependency installation. Each command supports `{{ … }}` template expressions and the same template vars are also exported as shell env vars (e.g. `$BOUQUET_WORKTREE_INDEX`). Env vars exported by the commands themselves are captured and propagated. **A non-zero exit aborts the worktree bootstrap** — captured stdout/stderr are written to bouquet's stderr and the worktree is marked `ERROR`. |
 | `copy_env_files` | list | Files copied from the main repo to the worktree (e.g. `.env`) |
 | `cow_clone_dirs` | list | Directories cloned via Copy-on-Write (APFS) instead of full copy |
 | `install_commands` | list | Dependency install commands (e.g. `uv sync`, `pnpm install`) |
