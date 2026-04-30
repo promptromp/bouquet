@@ -2,10 +2,12 @@
 
 from __future__ import annotations
 
+import logging
 from pathlib import Path
 
 import pytest
 
+from bouquet import log as bouquet_log
 from bouquet.bootstrap import SetupCommandsError, _run_setup_and_capture_env
 
 
@@ -99,3 +101,58 @@ def test_setup_commands_failure_surfaces_stderr(tmp_path: Path, capfd: pytest.Ca
     err = capfd.readouterr().err
     assert "exit 7" in err
     assert "bad stuff happened" in err
+
+
+def test_setup_commands_failure_writes_to_log_file(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    """When bouquet.log.configure has been called, failure stdout/stderr land in the file log."""
+    # Redirect ~/.local/state/bouquet/ into tmp_path and reset.
+    monkeypatch.setattr(Path, "home", lambda: tmp_path)
+    bouquet_logger = logging.getLogger("bouquet")
+    for h in list(bouquet_logger.handlers):
+        bouquet_logger.removeHandler(h)
+        h.close()
+    bouquet_log.LOG_FILE = None
+
+    log_file = bouquet_log.configure("logsmoke", level="DEBUG")
+
+    with pytest.raises(SetupCommandsError) as exc:
+        _run_setup_and_capture_env(
+            ['echo "stdout marker"; echo "stderr marker" >&2; exit 9'],
+            cwd=tmp_path,
+        )
+
+    # The exception message must point users at the log file.
+    assert str(log_file) in str(exc.value)
+    assert "exit code 9" in str(exc.value)
+
+    # Flush handlers and verify the captured output landed in the file.
+    for h in bouquet_logger.handlers:
+        h.flush()
+    contents = log_file.read_text()
+    assert "stdout marker" in contents
+    assert "stderr marker" in contents
+    assert "exit 9" in contents
+    assert "ERROR" in contents
+
+    # Cleanup: close handlers so the file isn't kept open across tests.
+    for h in list(bouquet_logger.handlers):
+        bouquet_logger.removeHandler(h)
+        h.close()
+    bouquet_log.LOG_FILE = None
+
+
+def test_setup_commands_failure_message_unconfigured_logging(tmp_path: Path) -> None:
+    """If bouquet.log.configure was never called, the exception message is the basic form."""
+    # Ensure no handlers are attached (other tests may leave state behind).
+    bouquet_logger = logging.getLogger("bouquet")
+    for h in list(bouquet_logger.handlers):
+        bouquet_logger.removeHandler(h)
+        h.close()
+    bouquet_log.LOG_FILE = None
+
+    with pytest.raises(SetupCommandsError) as exc:
+        _run_setup_and_capture_env(["exit 5"], cwd=tmp_path)
+
+    msg = str(exc.value)
+    assert msg == "setup_commands failed with exit code 5"
+    assert "see " not in msg  # no log file pointer when unconfigured

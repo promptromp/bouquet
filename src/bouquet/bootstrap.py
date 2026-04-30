@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import contextlib
 import json
+import logging
 import os
 import platform
 import shutil
@@ -12,15 +13,23 @@ import sys
 import tempfile
 from pathlib import Path
 
+from bouquet import log as bouquet_log
 from bouquet.config import BootstrapConfig
 from bouquet.template import render_template
+
+
+logger = logging.getLogger(__name__)
 
 
 class SetupCommandsError(RuntimeError):
     """Raised when one of ``BootstrapConfig.setup_commands`` exits non-zero.
 
-    The bash subprocess's captured stdout and stderr are dumped to bouquet's
-    own stderr before this is raised so the user can see what failed.
+    The bash subprocess's captured stdout and stderr are written to bouquet's
+    log file (``~/.local/state/bouquet/{project}.log`` once
+    :func:`bouquet.log.configure` has been called) and to bouquet's own
+    stderr.  When raised in TUI mode, stderr is captured by Textual — the
+    log file is the durable record, and this exception's ``__str__``
+    points the user at it.
     """
 
 
@@ -122,6 +131,10 @@ def _run_setup_and_capture_env(
         # Build env: parent env + BOUQUET_* template vars (stringified).
         subproc_env = {**os.environ, **{k: str(v) for k, v in template_vars.items()}}
 
+        logger.info("running %d setup_command(s) in %s", len(rendered), cwd)
+        for cmd in rendered:
+            logger.debug("  setup_command: %s", cmd)
+
         result = subprocess.run(
             ["bash", "-c", full_script],
             cwd=cwd,
@@ -133,6 +146,18 @@ def _run_setup_and_capture_env(
         if result.returncode != 0:
             stdout = result.stdout.decode(errors="replace") if result.stdout else ""
             stderr = result.stderr.decode(errors="replace") if result.stderr else ""
+
+            # File log — durable, full diagnostic.  This is the source of
+            # truth in TUI mode where stderr is captured by Textual.
+            logger.error(
+                "setup_commands failed (exit %d) in %s\n--- stdout ---\n%s\n--- stderr ---\n%s",
+                result.returncode,
+                cwd,
+                stdout or "(empty)",
+                stderr or "(empty)",
+            )
+
+            # Stderr framing — for direct (non-TUI) CLI invocation.
             sys.stderr.write(f"\n[bouquet] setup_commands failed (exit {result.returncode}) in {cwd}\n")
             if stdout:
                 sys.stderr.write(f"--- setup_commands stdout ---\n{stdout}")
@@ -144,7 +169,15 @@ def _run_setup_and_capture_env(
                     sys.stderr.write("\n")
             sys.stderr.write("[bouquet] worktree bootstrap aborted\n\n")
             sys.stderr.flush()
-            raise SetupCommandsError(f"setup_commands failed with exit code {result.returncode}")
+
+            # Exception message includes the log file path so the TUI's
+            # error toast (which only shows __str__) is actionable.
+            msg = f"setup_commands failed with exit code {result.returncode}"
+            if bouquet_log.LOG_FILE is not None:
+                msg += f" — see {bouquet_log.LOG_FILE} for details"
+            raise SetupCommandsError(msg)
+
+        logger.info("setup_commands completed successfully")
 
         try:
             with open(env_path) as f:
