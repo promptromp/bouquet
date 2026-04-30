@@ -8,13 +8,22 @@ from pathlib import Path
 
 import click
 
-from bouquet import __version__
+from bouquet import __version__, log as bouquet_log
 from bouquet.config import TEMPLATE_CONFIG, BouquetSettings, load_config
 from bouquet.git import get_repo_root, is_git_repo
 from bouquet.models import SessionState
 from bouquet.tasks import create_backend
 from bouquet.tmux import TmuxManager
 from bouquet.worktree import WorktreeManager
+
+
+_LOG_LEVEL_OPTION = click.option(
+    "--log-level",
+    type=click.Choice(["DEBUG", "INFO", "WARNING", "ERROR"], case_sensitive=False),
+    default="INFO",
+    show_default=True,
+    help="Verbosity of ~/.local/state/bouquet/<project>.log.",
+)
 
 
 @click.group()
@@ -27,7 +36,8 @@ def cli() -> None:
 @click.argument("project_name", required=False, default=None)
 @click.option("--repo", type=click.Path(exists=True, path_type=Path), default=None)
 @click.option("--config", "config_path", type=click.Path(exists=True, path_type=Path), default=None)
-def start(project_name: str | None, repo: Path | None, config_path: Path | None) -> None:
+@_LOG_LEVEL_OPTION
+def start(project_name: str | None, repo: Path | None, config_path: Path | None, log_level: str) -> None:
     """Start a Bouquet session for a project.
 
     Creates a tmux session with an orchestrator TUI for managing
@@ -46,6 +56,11 @@ def start(project_name: str | None, repo: Path | None, config_path: Path | None)
     project_name = _resolve_project_name(project_name, settings, repo_path)
     settings.project.name = project_name
     settings.project.repo_path = str(repo_path)
+
+    # Configure file logging — done before any worktree work so failures
+    # during adopt_existing or session bring-up land in the durable log.
+    log_path = bouquet_log.configure(project_name, level=log_level)
+    click.echo(f"Logs: {log_path}", err=True)
 
     # Build session name
     session_name = f"{settings.tmux.session_prefix}-{project_name}"
@@ -85,7 +100,7 @@ def start(project_name: str | None, repo: Path | None, config_path: Path | None)
         click.echo(f"Adopted {len(adopted)} existing worktree(s): {', '.join(branches)}")
 
     # Build the command to launch the TUI in window 0
-    tui_cmd = _build_tui_command(config_path, repo_path)
+    tui_cmd = _build_tui_command(config_path, repo_path, log_level=log_level)
     tmux.send_keys(session_name, "orchestrator", tui_cmd)
 
     click.echo(f"Created session '{session_name}'. Attaching...")
@@ -132,9 +147,17 @@ def _resolve_project_name(name: str | None, settings: BouquetSettings, repo_path
     sys.exit(1)
 
 
-def _build_tui_command(config_path: Path | None, repo_path: Path) -> str:
+def _build_tui_command(config_path: Path | None, repo_path: Path, log_level: str = "INFO") -> str:
     """Build the shell command to launch the TUI."""
-    parts = [sys.executable, "-m", "bouquet.tui.app", "--repo", str(repo_path)]
+    parts = [
+        sys.executable,
+        "-m",
+        "bouquet.tui.app",
+        "--repo",
+        str(repo_path),
+        "--log-level",
+        log_level,
+    ]
     if config_path:
         parts.extend(["--config", str(config_path)])
     return " ".join(parts)

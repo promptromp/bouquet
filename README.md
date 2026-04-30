@@ -263,6 +263,26 @@ With `layout = "main-vertical"` and two services:
 
 ---
 
+## Logs & Troubleshooting
+
+Bouquet writes a rotating log file to `~/.local/state/bouquet/<project>.log` (5 MB × 3 backups). `bouquet start` prints the path to stderr on launch.
+
+When a worktree creation fails — most often because a `setup_commands` step exited non-zero — the TUI shows a terse toast (`Error creating worktree: …`) but the captured stdout and stderr from your bash commands land in the log file, along with the cwd and exit code. Tail it to debug:
+
+```sh
+tail -f ~/.local/state/bouquet/<project>.log
+```
+
+The `SetupCommandsError` raised on failure includes the log file path in its message, so the toast will point you there directly.
+
+Pass `--log-level=DEBUG` to `bouquet start` for more verbose output (e.g. each rendered `setup_commands` line):
+
+```sh
+bouquet start --log-level=DEBUG
+```
+
+---
+
 ## Architecture
 
 ```

@@ -17,6 +17,7 @@ from textual.containers import Horizontal, Vertical
 from textual.coordinate import Coordinate
 from textual.widgets import Footer, Static
 
+from bouquet import log as bouquet_log
 from bouquet.activity import POLLABLE_STATUSES, ActivityMonitor
 from bouquet.agents.base import AgentResponse
 from bouquet.autopilot import AutopilotController
@@ -805,7 +806,7 @@ class OrchestratorApp(App):
         self._refresh_tasks()
 
 
-def _run_tui(repo_path: Path, config_path: Path | None = None) -> None:
+def _run_tui(repo_path: Path, config_path: Path | None = None, log_level: str = "INFO") -> None:
     """Launch the TUI — called from within a tmux window."""
     settings = load_config(config_path=config_path, repo_path=repo_path)
     settings.project.repo_path = str(repo_path)
@@ -825,6 +826,11 @@ def _run_tui(repo_path: Path, config_path: Path | None = None) -> None:
         click.echo("Error: could not find session state.", err=True)
         sys.exit(1)
 
+    # Configure file logging.  Stderr in TUI mode is captured by Textual,
+    # so the file at ~/.local/state/bouquet/<project>.log is the durable
+    # source of truth for diagnosing setup_commands / worktree errors.
+    bouquet_log.configure(project_name, level=log_level)
+
     tmux = TmuxManager()
     manager = WorktreeManager(settings, state, tmux)
 
@@ -835,9 +841,14 @@ def _run_tui(repo_path: Path, config_path: Path | None = None) -> None:
 @click.command()
 @click.option("--repo", type=click.Path(exists=True, path_type=Path), required=True)
 @click.option("--config", "config_path", type=click.Path(exists=True, path_type=Path), default=None)
-def main(repo: Path, config_path: Path | None) -> None:
+@click.option(
+    "--log-level",
+    type=click.Choice(["DEBUG", "INFO", "WARNING", "ERROR"], case_sensitive=False),
+    default="INFO",
+)
+def main(repo: Path, config_path: Path | None, log_level: str) -> None:
     """Launch the Bouquet TUI (internal — called from within tmux)."""
-    _run_tui(repo.resolve(), config_path)
+    _run_tui(repo.resolve(), config_path, log_level=log_level)
 
 
 if __name__ == "__main__":
