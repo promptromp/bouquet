@@ -113,7 +113,7 @@ def _run_setup_and_capture_env(
         try:
             with open(env_path) as f:
                 result_env: dict[str, str] = json.load(f)
-        except (json.JSONDecodeError, FileNotFoundError, OSError):
+        except json.JSONDecodeError, FileNotFoundError, OSError:
             return {}
 
         # Diff against the env the subprocess actually started with.  This
