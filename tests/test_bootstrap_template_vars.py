@@ -4,7 +4,9 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from bouquet.bootstrap import _run_setup_and_capture_env
+import pytest
+
+from bouquet.bootstrap import SetupCommandsError, _run_setup_and_capture_env
 
 
 def test_setup_commands_see_bouquet_template_vars(tmp_path: Path) -> None:
@@ -59,3 +61,41 @@ def test_template_vars_do_not_appear_in_env_delta(tmp_path: Path) -> None:
     delta = _run_setup_and_capture_env(["true"], cwd=tmp_path, template_vars=template_vars)
     for key in template_vars:
         assert key not in delta, f"{key} leaked into env delta"
+
+
+def test_setup_commands_failure_raises(tmp_path: Path, capfd: pytest.CaptureFixture[str]) -> None:
+    """Non-zero exit from any command must raise SetupCommandsError."""
+    commands = [
+        "true",
+        "echo 'about to fail' && false",
+        # This third command must NOT run (the && chain short-circuits) — its
+        # presence verifies we don't paper over the failure by always running
+        # everything.
+        "touch /tmp/bouquet-should-not-be-created-by-test",
+    ]
+
+    with pytest.raises(SetupCommandsError) as exc:
+        _run_setup_and_capture_env(commands, cwd=tmp_path)
+
+    assert "exit code 1" in str(exc.value)
+
+    err = capfd.readouterr().err
+    assert "setup_commands failed (exit 1)" in err
+    assert "about to fail" in err  # captured stdout was surfaced
+    assert "worktree bootstrap aborted" in err
+
+    # Sanity: the third command was indeed skipped.
+    assert not Path("/tmp/bouquet-should-not-be-created-by-test").exists()
+
+
+def test_setup_commands_failure_surfaces_stderr(tmp_path: Path, capfd: pytest.CaptureFixture[str]) -> None:
+    """Subprocess stderr must be surfaced on failure so users can debug."""
+    with pytest.raises(SetupCommandsError):
+        _run_setup_and_capture_env(
+            ['echo "bad stuff happened" >&2; exit 7'],
+            cwd=tmp_path,
+        )
+
+    err = capfd.readouterr().err
+    assert "exit 7" in err
+    assert "bad stuff happened" in err
