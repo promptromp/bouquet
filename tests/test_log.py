@@ -20,7 +20,7 @@ def isolated_state_dir(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
     for h in list(root.handlers):
         root.removeHandler(h)
         h.close()
-    bouquet_log.LOG_FILE = None
+    bouquet_log._log_file = None  # noqa: SLF001 — test reset
     yield tmp_path
     # Cleanup: close handlers we added so the rotating file can be deleted.
     for h in list(root.handlers):
@@ -32,7 +32,7 @@ def test_configure_creates_state_dir_and_log_file(isolated_state_dir: Path) -> N
     log_path = bouquet_log.configure("myproj")
     assert log_path == isolated_state_dir / ".local/state/bouquet/myproj.log"
     assert log_path.parent.is_dir()
-    assert log_path == bouquet_log.LOG_FILE
+    assert log_path == bouquet_log.get_log_file()
 
 
 def test_configure_writes_log_records_to_file(isolated_state_dir: Path) -> None:

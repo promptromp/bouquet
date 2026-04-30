@@ -24,10 +24,9 @@ from logging.handlers import RotatingFileHandler
 from pathlib import Path
 
 
-#: Path to the active log file once :func:`configure` has been called.
-#: Callers (e.g. :class:`bouquet.bootstrap.SetupCommandsError`) reference
-#: this to point users at the durable diagnostic record.
-LOG_FILE: Path | None = None
+# Module-private — read via :func:`get_log_file`.  Holds the path to the
+# active log file once :func:`configure` has been called.
+_log_file: Path | None = None
 
 _LOGGER_NAME = "bouquet"
 _FORMATTER = logging.Formatter(
@@ -45,6 +44,15 @@ def state_dir() -> Path:
     return d
 
 
+def get_log_file() -> Path | None:
+    """Return the path to the active log file, or ``None`` if not configured.
+
+    Callers (e.g. :class:`bouquet.bootstrap.SetupCommandsError`) use this
+    to point users at the durable diagnostic record.
+    """
+    return _log_file
+
+
 def _level_value(level: str | int) -> int:
     """Normalise a level name or int into the corresponding logging constant."""
     if isinstance(level, int):
@@ -60,7 +68,7 @@ def configure(project_name: str, level: str | int = "INFO") -> Path:
     *level* controls the file handler's threshold (INFO by default).
     The console handler is always WARNING+ regardless.
     """
-    global LOG_FILE
+    global _log_file
     log_file = state_dir() / f"{project_name}.log"
 
     root = logging.getLogger(_LOGGER_NAME)
@@ -70,7 +78,7 @@ def configure(project_name: str, level: str | int = "INFO") -> Path:
     # Idempotent: skip if a file handler already points at this log file.
     for h in root.handlers:
         if isinstance(h, RotatingFileHandler) and Path(h.baseFilename) == log_file:
-            LOG_FILE = log_file
+            _log_file = log_file
             return log_file
 
     fh = RotatingFileHandler(
@@ -91,6 +99,6 @@ def configure(project_name: str, level: str | int = "INFO") -> Path:
         ch.setFormatter(_FORMATTER)
         root.addHandler(ch)
 
-    LOG_FILE = log_file
+    _log_file = log_file
     root.info("logging configured for project=%s level=%s", project_name, level)
     return log_file

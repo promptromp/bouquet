@@ -111,7 +111,7 @@ def test_setup_commands_failure_writes_to_log_file(tmp_path: Path, monkeypatch: 
     for h in list(bouquet_logger.handlers):
         bouquet_logger.removeHandler(h)
         h.close()
-    bouquet_log.LOG_FILE = None
+    bouquet_log._log_file = None  # noqa: SLF001 — test reset
 
     log_file = bouquet_log.configure("logsmoke", level="DEBUG")
 
@@ -138,7 +138,7 @@ def test_setup_commands_failure_writes_to_log_file(tmp_path: Path, monkeypatch: 
     for h in list(bouquet_logger.handlers):
         bouquet_logger.removeHandler(h)
         h.close()
-    bouquet_log.LOG_FILE = None
+    bouquet_log._log_file = None  # noqa: SLF001 — test reset
 
 
 def test_setup_commands_failure_message_unconfigured_logging(tmp_path: Path) -> None:
@@ -148,7 +148,7 @@ def test_setup_commands_failure_message_unconfigured_logging(tmp_path: Path) -> 
     for h in list(bouquet_logger.handlers):
         bouquet_logger.removeHandler(h)
         h.close()
-    bouquet_log.LOG_FILE = None
+    bouquet_log._log_file = None  # noqa: SLF001 — test reset
 
     with pytest.raises(SetupCommandsError) as exc:
         _run_setup_and_capture_env(["exit 5"], cwd=tmp_path)

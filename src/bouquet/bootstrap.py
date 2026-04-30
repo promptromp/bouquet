@@ -172,9 +172,10 @@ def _run_setup_and_capture_env(
 
             # Exception message includes the log file path so the TUI's
             # error toast (which only shows __str__) is actionable.
+            log_file = bouquet_log.get_log_file()
             msg = f"setup_commands failed with exit code {result.returncode}"
-            if bouquet_log.LOG_FILE is not None:
-                msg += f" — see {bouquet_log.LOG_FILE} for details"
+            if log_file is not None:
+                msg += f" — see {log_file} for details"
             raise SetupCommandsError(msg)
 
         logger.info("setup_commands completed successfully")
