@@ -19,13 +19,13 @@ def test_setup_commands_see_bouquet_template_vars(tmp_path: Path) -> None:
         "BOUQUET_WORKTREE_INDEX": 7,
         "BOUQUET_WORKTREE_BRANCH": "feature/parallel",
         "BOUQUET_WORKTREE_PATH": str(tmp_path),
-        "BOUQUET_PROJECT_NAME": "glo-arena",
+        "BOUQUET_PROJECT_NAME": "myproject",
     }
 
     _run_setup_and_capture_env(commands, cwd=tmp_path, template_vars=template_vars)
 
     contents = marker.read_text().splitlines()
-    assert contents == ["7", "feature/parallel", "glo-arena"]
+    assert contents == ["7", "feature/parallel", "myproject"]
 
 
 def test_setup_commands_render_template_placeholders(tmp_path: Path) -> None:
