@@ -210,6 +210,49 @@ def test_bootstrap_post_deps_sees_setup_env_delta(tmp_path: Path) -> None:
     assert "BOUQUET_TEST_FROM_SETUP=setup-value" in marker.read_text()
 
 
+def test_bootstrap_deps_commands_see_setup_env_delta(tmp_path: Path) -> None:
+    """python_deps_command and node_deps_command must see env vars exported by
+    setup_commands.
+
+    This locks down the deps_env construction (line ~276 in bootstrap.py).
+    Same bug class as the post_deps_commands regression: if deps_env breaks,
+    deps install would silently use the parent shell's env instead of the
+    worktree's per-config overrides — and a per-worktree pip index URL,
+    npm registry token, etc. exported by setup_commands would have no effect.
+    """
+    worktree = tmp_path / "wt"
+    worktree.mkdir()
+    py_marker = worktree / "py_deps_saw.txt"
+    node_marker = worktree / "node_deps_saw.txt"
+
+    config = BootstrapConfig(
+        setup_commands=['export BOUQUET_TEST_FROM_SETUP="setup-value"'],
+        python_deps_command=f'echo "FROM=${{BOUQUET_TEST_FROM_SETUP}}" > "{py_marker}"',
+        node_deps_command=f'echo "FROM=${{BOUQUET_TEST_FROM_SETUP}}" > "{node_marker}"',
+        post_deps_commands=[],
+        copy_env_files=[],
+        use_cow_clone=False,
+        direnv_allow=False,
+    )
+
+    bootstrap_worktree(
+        repo_path=tmp_path,
+        worktree_path=worktree,
+        config=config,
+        python=True,
+        javascript=True,
+    )
+
+    assert py_marker.exists(), "python_deps_command did not run"
+    assert "FROM=setup-value" in py_marker.read_text(), (
+        f"python_deps_command did not see setup var: {py_marker.read_text()!r}"
+    )
+    assert node_marker.exists(), "node_deps_command did not run"
+    assert "FROM=setup-value" in node_marker.read_text(), (
+        f"node_deps_command did not see setup var: {node_marker.read_text()!r}"
+    )
+
+
 def test_bootstrap_post_deps_failure_raises(tmp_path: Path) -> None:
     """A failing post_deps_command must raise SetupCommandsError with phase name."""
     worktree = tmp_path / "wt"

@@ -332,6 +332,74 @@ def test_create_with_setup_commands_sets_tmux_env(
     )
 
 
+def test_create_with_post_deps_commands_sets_tmux_env(
+    sample_settings: BouquetSettings,
+    tmp_git_repo: Path,
+    mock_tmux: MagicMock,
+    mock_state_dir: Path,
+) -> None:
+    """post_deps_commands env vars must also propagate to the tmux session.
+
+    Mirrors test_create_with_setup_commands_sets_tmux_env for the
+    post_deps_commands phase.  Ensures both phases of the bootstrap
+    contribute their env-delta to set_session_environment so service /
+    agent panes inherit them — a regression here would mean a
+    post_deps step (e.g. picking a model alias) couldn't influence
+    the running services.
+    """
+    sample_settings.bootstrap.setup_commands = []
+    sample_settings.bootstrap.post_deps_commands = ["export BOUQUET_FROM_POST=post-value"]
+    sample_settings.bootstrap.python_deps_command = ""
+    sample_settings.bootstrap.node_deps_command = ""
+    sample_settings.bootstrap.copy_env_files = []
+    sample_settings.bootstrap.use_cow_clone = False
+
+    state = SessionState(
+        project_name="test-project",
+        tmux_session_name="bouquet-test-project",
+        repo_path=tmp_git_repo,
+    )
+    state.save()
+
+    mgr = WorktreeManager(sample_settings, state, mock_tmux)
+    mgr.create("feature/post-deps-env-test")
+
+    mock_tmux.set_session_environment.assert_any_call(
+        "bouquet-test-project",
+        "BOUQUET_FROM_POST",
+        "post-value",
+    )
+
+
+def test_create_setup_and_post_deps_both_propagate_to_tmux(
+    sample_settings: BouquetSettings,
+    tmp_git_repo: Path,
+    mock_tmux: MagicMock,
+    mock_state_dir: Path,
+) -> None:
+    """When BOTH phases export vars, both must propagate to tmux session env."""
+    sample_settings.bootstrap.setup_commands = ["export BOUQUET_FROM_SETUP=s"]
+    sample_settings.bootstrap.post_deps_commands = ["export BOUQUET_FROM_POST=p"]
+    sample_settings.bootstrap.python_deps_command = ""
+    sample_settings.bootstrap.node_deps_command = ""
+    sample_settings.bootstrap.copy_env_files = []
+    sample_settings.bootstrap.use_cow_clone = False
+
+    state = SessionState(
+        project_name="test-project",
+        tmux_session_name="bouquet-test-project",
+        repo_path=tmp_git_repo,
+    )
+    state.save()
+
+    mgr = WorktreeManager(sample_settings, state, mock_tmux)
+    mgr.create("feature/both-phases-env-test")
+
+    propagated = {call.args[1]: call.args[2] for call in mock_tmux.set_session_environment.call_args_list}
+    assert propagated.get("BOUQUET_FROM_SETUP") == "s"
+    assert propagated.get("BOUQUET_FROM_POST") == "p"
+
+
 def test_create_without_setup_commands_no_tmux_env(manager: WorktreeManager) -> None:
     """Without setup_commands, set_session_environment should not be called."""
     manager.create("feature/no-setup")
