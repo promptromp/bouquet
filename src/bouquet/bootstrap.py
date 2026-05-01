@@ -93,6 +93,7 @@ def _run_setup_and_capture_env(
     cwd: Path,
     template_vars: dict[str, object] | None = None,
     phase: str = "setup_commands",
+    extra_env: dict[str, str] | None = None,
 ) -> dict[str, str]:
     """Run a phase of shell commands in a single bash shell and return the env delta.
 
@@ -112,6 +113,14 @@ def _run_setup_and_capture_env(
     (``setup_commands``, ``post_deps_commands``, ``teardown_commands``) — used
     in log messages, stderr framing, and the exception message so failures
     are unambiguous.
+
+    *extra_env* is layered into the bash subprocess's environment on top of
+    the parent process's ``os.environ``.  This is how a later phase
+    (``post_deps_commands``) sees the env delta exported by an earlier
+    phase (``setup_commands``) — ``BootstrapConfig`` callers pass the
+    accumulated delta in here.  These vars are baked into the subprocess
+    env at start, so the env-diff at the end correctly excludes them and
+    they don't show up in the returned delta a second time.
 
     If any command exits non-zero, the captured stdout and stderr are dumped
     to bouquet's own stderr and to the file logger, and
@@ -135,8 +144,14 @@ def _run_setup_and_capture_env(
         user_script = " && ".join(rendered)
         full_script = f"{user_script}\n_BOUQUET_USER_RC=$?\n{env_dump}\nexit $_BOUQUET_USER_RC\n"
 
-        # Build env: parent env + BOUQUET_* template vars (stringified).
-        subproc_env = {**os.environ, **{k: str(v) for k, v in template_vars.items()}}
+        # Build env: parent env + extra_env (e.g. an earlier phase's delta) +
+        # BOUQUET_* template vars (stringified).  template_vars come last so
+        # they always win — they're internal bouquet state, not user input.
+        subproc_env = {
+            **os.environ,
+            **(extra_env or {}),
+            **{k: str(v) for k, v in template_vars.items()},
+        }
 
         logger.info("running %d %s in %s", len(rendered), phase, cwd)
         for cmd in rendered:
@@ -298,12 +313,19 @@ def bootstrap_worktree(
     # 6. Run post_deps_commands and merge their env delta with setup's.
     #    These run AFTER the venv exists and node_modules is populated, so
     #    they can use uv-managed tools (e.g. `uv run migrate upgrade head`).
+    #
+    #    setup_commands' delta is threaded in via extra_env so post_deps
+    #    sees the same env that the deps-install commands saw — without
+    #    this, a setup_commands step that exports per-worktree DB / queue
+    #    overrides has no effect on post_deps, and `uv run migrate` would
+    #    silently target the parent shell's default DB.
     if config.post_deps_commands:
         post_deps_delta = _run_setup_and_capture_env(
             config.post_deps_commands,
             worktree_path,
             template_vars=template_vars,
             phase="post_deps_commands",
+            extra_env=env_delta,
         )
         env_delta = {**env_delta, **post_deps_delta}
 
