@@ -42,7 +42,7 @@ bouquet start              # TUI launches, create worktrees, agents spin up
 
 ```bash
 # Run without installing
-uvx pybouquet --help
+uvx --from pybouquet bouquet --help
 
 # Or install via pip
 pip install pybouquet
