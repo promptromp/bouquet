@@ -92,8 +92,9 @@ def _run_setup_and_capture_env(
     commands: list[str],
     cwd: Path,
     template_vars: dict[str, object] | None = None,
+    phase: str = "setup_commands",
 ) -> dict[str, str]:
-    """Run setup commands in a single bash shell and return the environment delta.
+    """Run a phase of shell commands in a single bash shell and return the env delta.
 
     Executes all *commands* sequentially in one ``bash -c`` invocation so that
     ``export`` statements in earlier commands are visible to later ones.  After
@@ -104,13 +105,19 @@ def _run_setup_and_capture_env(
 
     *template_vars* are rendered into ``{{ ... }}`` placeholders inside each
     command string AND exported into the bash subprocess's environment so
-    plain ``$VAR`` references work too.  This lets setup_commands reference
+    plain ``$VAR`` references work too.  This lets commands reference
     ``BOUQUET_WORKTREE_INDEX`` etc. either via templating or via shell vars.
 
+    *phase* names which config field these commands came from
+    (``setup_commands``, ``post_deps_commands``, ``teardown_commands``) — used
+    in log messages, stderr framing, and the exception message so failures
+    are unambiguous.
+
     If any command exits non-zero, the captured stdout and stderr are dumped
-    to bouquet's own stderr and :class:`SetupCommandsError` is raised so the
-    caller can mark the worktree as ERROR rather than continuing with a
-    partially-bootstrapped state.
+    to bouquet's own stderr and to the file logger, and
+    :class:`SetupCommandsError` is raised so the caller can decide how to
+    react (the standard bootstrap path lets it propagate so the worktree is
+    marked ERROR; teardown wraps the call to keep cleanup best-effort).
     """
     template_vars = template_vars or {}
     rendered = [render_template(cmd, template_vars) for cmd in commands]
@@ -131,9 +138,9 @@ def _run_setup_and_capture_env(
         # Build env: parent env + BOUQUET_* template vars (stringified).
         subproc_env = {**os.environ, **{k: str(v) for k, v in template_vars.items()}}
 
-        logger.info("running %d setup_command(s) in %s", len(rendered), cwd)
+        logger.info("running %d %s in %s", len(rendered), phase, cwd)
         for cmd in rendered:
-            logger.debug("  setup_command: %s", cmd)
+            logger.debug("  %s: %s", phase, cmd)
 
         result = subprocess.run(
             ["bash", "-c", full_script],
@@ -150,7 +157,8 @@ def _run_setup_and_capture_env(
             # File log — durable, full diagnostic.  This is the source of
             # truth in TUI mode where stderr is captured by Textual.
             logger.error(
-                "setup_commands failed (exit %d) in %s\n--- stdout ---\n%s\n--- stderr ---\n%s",
+                "%s failed (exit %d) in %s\n--- stdout ---\n%s\n--- stderr ---\n%s",
+                phase,
                 result.returncode,
                 cwd,
                 stdout or "(empty)",
@@ -158,13 +166,13 @@ def _run_setup_and_capture_env(
             )
 
             # Stderr framing — for direct (non-TUI) CLI invocation.
-            sys.stderr.write(f"\n[bouquet] setup_commands failed (exit {result.returncode}) in {cwd}\n")
+            sys.stderr.write(f"\n[bouquet] {phase} failed (exit {result.returncode}) in {cwd}\n")
             if stdout:
-                sys.stderr.write(f"--- setup_commands stdout ---\n{stdout}")
+                sys.stderr.write(f"--- {phase} stdout ---\n{stdout}")
                 if not stdout.endswith("\n"):
                     sys.stderr.write("\n")
             if stderr:
-                sys.stderr.write(f"--- setup_commands stderr ---\n{stderr}")
+                sys.stderr.write(f"--- {phase} stderr ---\n{stderr}")
                 if not stderr.endswith("\n"):
                     sys.stderr.write("\n")
             sys.stderr.write("[bouquet] worktree bootstrap aborted\n\n")
@@ -173,12 +181,12 @@ def _run_setup_and_capture_env(
             # Exception message includes the log file path so the TUI's
             # error toast (which only shows __str__) is actionable.
             log_file = bouquet_log.get_log_file()
-            msg = f"setup_commands failed with exit code {result.returncode}"
+            msg = f"{phase} failed with exit code {result.returncode}"
             if log_file is not None:
                 msg += f" — see {log_file} for details"
             raise SetupCommandsError(msg)
 
-        logger.info("setup_commands completed successfully")
+        logger.info("%s completed successfully", phase)
 
         try:
             with open(env_path) as f:
@@ -209,17 +217,22 @@ def bootstrap_worktree(
     2. CoW-clone node_modules if enabled (skip .venv — it contains
        hardcoded paths that break in a new location; let the deps
        command create a fresh venv instead)
-    3. Run setup commands and capture env delta
+    3. Run ``setup_commands`` and capture env delta (e.g. private-registry
+       auth, per-worktree resource provisioning)
     4. Pin Python version if configured
     5. Run dependency install commands (with setup env applied)
-    6. Allow direnv if configured
+    6. Run ``post_deps_commands`` and capture env delta (e.g. database
+       migrations that need the venv to exist).  Same loud-failure
+       semantics as setup_commands.
+    7. Allow direnv if configured
 
     *template_vars* (e.g. ``BOUQUET_WORKTREE_INDEX``) are forwarded to
-    :func:`_run_setup_and_capture_env` so setup_commands can reference them
+    :func:`_run_setup_and_capture_env` so commands can reference them
     as shell env vars or ``{{ ... }}`` template placeholders.
 
-    Returns a dict of environment variables that were added or changed by
-    the setup commands (empty dict if none).
+    Returns the merged dict of environment variables added or changed by
+    the setup_commands and post_deps_commands phases combined (empty dict
+    if neither configured).
     """
     # 1. Copy env files (.env, .env.local, .envrc, etc.)
     for env_file in config.copy_env_files:
@@ -282,7 +295,19 @@ def bootstrap_worktree(
                 shell=True,
             )
 
-    # 6. Allow direnv
+    # 6. Run post_deps_commands and merge their env delta with setup's.
+    #    These run AFTER the venv exists and node_modules is populated, so
+    #    they can use uv-managed tools (e.g. `uv run migrate upgrade head`).
+    if config.post_deps_commands:
+        post_deps_delta = _run_setup_and_capture_env(
+            config.post_deps_commands,
+            worktree_path,
+            template_vars=template_vars,
+            phase="post_deps_commands",
+        )
+        env_delta = {**env_delta, **post_deps_delta}
+
+    # 7. Allow direnv
     if config.direnv_allow:
         _direnv_allow(worktree_path)
 
