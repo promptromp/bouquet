@@ -166,6 +166,50 @@ def test_bootstrap_post_deps_env_merged_with_setup(tmp_path: Path) -> None:
     assert delta.get("BOUQUET_FROM_POST") == "p"
 
 
+def test_bootstrap_post_deps_sees_setup_env_delta(tmp_path: Path) -> None:
+    """post_deps_commands must see env vars exported by setup_commands.
+
+    Regression for the bug where setup_commands' env delta wasn't threaded
+    into the post_deps_commands subprocess.  Concrete failure mode: a
+    setup_commands step that exports per-worktree DB overrides
+    (GLO_ARENA__POSTGRES_*) had no effect on post_deps, so
+    `uv run migrate upgrade head` ran against the parent shell's default
+    DB instead of the worktree's.
+    """
+    worktree = tmp_path / "wt"
+    worktree.mkdir()
+    marker = worktree / "post_deps_saw_setup_var.txt"
+
+    config = BootstrapConfig(
+        setup_commands=['export BOUQUET_TEST_FROM_SETUP="setup-value"'],
+        post_deps_commands=[
+            # Fail loudly with a recognisable message if the var didn't propagate.
+            f'echo "BOUQUET_TEST_FROM_SETUP=${{BOUQUET_TEST_FROM_SETUP}}" > "{marker}"',
+            '[ "${BOUQUET_TEST_FROM_SETUP}" = "setup-value" ] '
+            "|| (echo 'POST_DEPS DID NOT SEE SETUP VAR' >&2 && exit 42)",
+        ],
+        copy_env_files=[],
+        python_deps_command="",
+        node_deps_command="",
+        use_cow_clone=False,
+        direnv_allow=False,
+    )
+
+    bootstrap_worktree(
+        repo_path=tmp_path,
+        worktree_path=worktree,
+        config=config,
+        python=True,
+        javascript=False,
+    )
+
+    # If post_deps did NOT see the setup var, exit 42 above raises
+    # SetupCommandsError before we get here.  Marker confirms the actual
+    # value reached the subshell.
+    assert marker.exists()
+    assert "BOUQUET_TEST_FROM_SETUP=setup-value" in marker.read_text()
+
+
 def test_bootstrap_post_deps_failure_raises(tmp_path: Path) -> None:
     """A failing post_deps_command must raise SetupCommandsError with phase name."""
     worktree = tmp_path / "wt"
