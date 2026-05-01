@@ -10,7 +10,7 @@ CLI (Click) → bouquet start/stop/init
        ├─► git.py         subprocess calls for worktree CRUD
        ├─► tmux.py        libtmux wrapper for session/window/pane lifecycle
        ├─► template.py    safe {{ expr }} rendering for service commands
-       ├─► bootstrap.py   setup commands + env capture, env file copy, CoW clone, dep install
+       ├─► bootstrap.py   setup_commands → deps install → post_deps_commands; env capture, env file copy, CoW clone; teardown_commands on remove
        ├─► activity.py    ActivityMonitor — pane scraping for live status
        ├─► github.py      gh CLI wrapper for PR URL lookup
        ├─► tasks/         pluggable task queue (LocalBackend, GitHubIssuesBackend)
@@ -42,9 +42,11 @@ graph TD
 `bouquet start` creates a tmux session, launches the TUI in window 0, then the TUI drives `WorktreeManager.create()` which chains:
 
 1. **Git worktree creation** — new branch + worktree directory
-2. **Bootstrap** — setup commands, env capture, CoW clone, dependency install
-3. **Tmux window** — new window with agent pane + service panes
+2. **Bootstrap** — `setup_commands` (env capture), env file copy, CoW clone, `python_deps_command` / `node_deps_command`, `post_deps_commands` (env capture), `direnv allow`
+3. **Tmux window** — new window with agent pane + service panes (env from setup + post_deps propagated via `set_environment`)
 4. **Agent launch** — `send_keys` to the agent pane
+
+`WorktreeManager.remove()` runs `teardown_commands` first (best-effort, so user code can still reach the on-disk checkout) and then kills the tmux window and removes the git worktree.
 
 ## Activity Detection
 

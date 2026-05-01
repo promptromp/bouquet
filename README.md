@@ -150,9 +150,23 @@ Each worktree gets a unique index (1, 2, 3, ...) so services bind to different p
 
 Arithmetic supported: `{{ 8000 + BOUQUET_WORKTREE_INDEX }}` → `8001`.
 
-The same template variables are also available in `[bootstrap] setup_commands` — both as `{{ … }}` placeholders and as plain shell env vars (`$BOUQUET_WORKTREE_INDEX`, etc.) — so setup scripts can provision per-worktree resources (databases, queues, …) without external coordination.
+The same template variables are also available in `[bootstrap]` `setup_commands`, `post_deps_commands`, and `teardown_commands` — both as `{{ … }}` placeholders and as plain shell env vars (`$BOUQUET_WORKTREE_INDEX`, etc.) — so setup/teardown scripts can provision and reclaim per-worktree resources (databases, queues, …) without external coordination.
 
 No services defined = single pane with just the agent (backward compatible).
+
+### Bootstrap hooks: `setup_commands` vs `post_deps_commands` vs `teardown_commands`
+
+The three `[bootstrap]` hook lists run at different points in the worktree lifecycle:
+
+| Hook | When | On failure | Typical use |
+|---|---|---|---|
+| `setup_commands` | **Before** `python_deps_command` / `node_deps_command` | **Loud** — raises `SetupCommandsError`, worktree → `ERROR` | private-registry auth (CodeArtifact tokens), provisioning per-worktree DBs / queues |
+| `post_deps_commands` | **After** deps install, before `direnv_allow` (so `.venv` / `node_modules` exist) | **Loud** — same as setup_commands | `uv run migrate upgrade head`, asset compilation, anything that needs the project's tooling |
+| `teardown_commands` | **Before** tmux window kill + git worktree removal (so the on-disk checkout is still reachable) | **Best-effort** — failures logged, cleanup proceeds | reclaiming external per-worktree resources at remove time (drop DBs, delete queues) |
+
+`setup_commands` and `post_deps_commands` also have **env-capture**: any `export FOO=bar` lines in the user's commands are captured and propagated into both subsequent install commands and the tmux session, so service panes inherit them.
+
+See [docs/configuration.md](docs/configuration.md#bootstrap) for the full reference.
 
 ---
 
@@ -267,7 +281,7 @@ With `layout = "main-vertical"` and two services:
 
 Bouquet writes a rotating log file to `~/.local/state/bouquet/<project>.log` (5 MB × 3 backups). `bouquet start` prints the path to stderr on launch.
 
-When a worktree creation fails — most often because a `setup_commands` step exited non-zero — the TUI shows a terse toast (`Error creating worktree: …`) but the captured stdout and stderr from your bash commands land in the log file, along with the cwd and exit code. Tail it to debug:
+When a worktree creation fails — most often because a `setup_commands` or `post_deps_commands` step exited non-zero — the TUI shows a terse toast (`Error creating worktree: …`) but the captured stdout and stderr from your bash commands land in the log file, along with the phase name (`setup_commands` vs `post_deps_commands`), cwd, and exit code. Tail it to debug:
 
 ```sh
 tail -f ~/.local/state/bouquet/<project>.log
@@ -275,7 +289,9 @@ tail -f ~/.local/state/bouquet/<project>.log
 
 The `SetupCommandsError` raised on failure includes the log file path in its message, so the toast will point you there directly.
 
-Pass `--log-level=DEBUG` to `bouquet start` for more verbose output (e.g. each rendered `setup_commands` line):
+`teardown_commands` failures are best-effort and don't block worktree removal — they log a `WARNING`-level line in the same log file, so check there if a worktree was removed but external resources weren't reclaimed.
+
+Pass `--log-level=DEBUG` to `bouquet start` for more verbose output (e.g. each rendered `setup_commands` / `post_deps_commands` / `teardown_commands` line):
 
 ```sh
 bouquet start --log-level=DEBUG
