@@ -105,6 +105,8 @@ Dev servers that run alongside the agent in each worktree window.
 |-----|------|-------------|
 | `python_version` | string | Runs `uv python pin <version>` before dependency installation |
 | `setup_commands` | list | Shell commands run before dependency installation. Each command supports `{{ … }}` template expressions and the same template vars are also exported as shell env vars (e.g. `$BOUQUET_WORKTREE_INDEX`). Env vars exported by the commands themselves are captured and propagated. **A non-zero exit aborts the worktree bootstrap** — captured stdout/stderr are written to bouquet's stderr and the worktree is marked `ERROR`. |
+| `post_deps_commands` | list | Shell commands run AFTER `python_deps_command`/`node_deps_command` (so the venv / `node_modules` are available) and before `direnv_allow`. Same template-variable + env-capture + loud-failure semantics as `setup_commands`. Use for steps that need the project's tooling — e.g. `uv run migrate upgrade head`. |
+| `teardown_commands` | list | Shell commands run when bouquet removes a worktree, BEFORE the tmux window is killed and the git worktree is removed (so user code can still reach the on-disk checkout). Same template variables. **Best-effort:** failures are logged but don't block tmux/git cleanup. Use to reclaim external per-worktree resources (DBs, queues, caches). |
 | `copy_env_files` | list | Files copied from the main repo to the worktree (e.g. `.env`) |
 | `cow_clone_dirs` | list | Directories cloned via Copy-on-Write (APFS) instead of full copy |
 | `install_commands` | list | Dependency install commands (e.g. `uv sync`, `pnpm install`) |

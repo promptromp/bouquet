@@ -3,18 +3,22 @@
 from __future__ import annotations
 
 import contextlib
+import logging
 import re
 import time
 from datetime import datetime
 from pathlib import Path
 
 from bouquet import git
-from bouquet.bootstrap import bootstrap_worktree
+from bouquet.bootstrap import SetupCommandsError, _run_setup_and_capture_env, bootstrap_worktree
 from bouquet.config import BouquetSettings
 from bouquet.models import SessionState, WorktreeInfo, WorktreeStatus
 from bouquet.tasks.base import Task, TaskQueueBackend, TaskStatus
 from bouquet.template import render_template
 from bouquet.tmux import TmuxManager
+
+
+logger = logging.getLogger(__name__)
 
 
 _AGENT_STARTUP_DELAY = 3  # seconds to wait for agent process to initialize
@@ -233,7 +237,19 @@ class WorktreeManager:
         return adopted
 
     def remove(self, branch: str) -> None:
-        """Remove a worktree and its associated tmux window."""
+        """Remove a worktree and its associated tmux window.
+
+        If ``BootstrapConfig.teardown_commands`` is configured, runs them
+        in the worktree's path *before* killing tmux/removing the git
+        worktree, so user code can reach the still-on-disk checkout.
+
+        Teardown is best-effort — if commands fail, the failure is logged
+        (file logger from ``bouquet.log`` plus stderr) but the rest of the
+        cleanup proceeds.  Rationale: a transient infra failure
+        (e.g. external service down) shouldn't block the local cleanup of
+        tmux + git worktree, which the user can always retry from the
+        command line.
+        """
         # Find the worktree info
         info = self.state.find_worktree(branch)
         if info is None:
@@ -241,6 +257,25 @@ class WorktreeManager:
 
         info.status = WorktreeStatus.REMOVING
         self.state.save()
+
+        # Run teardown_commands BEFORE killing tmux / removing git worktree,
+        # so the worktree path still exists for user cleanup logic.
+        teardown_cmds = self.settings.bootstrap.teardown_commands
+        if teardown_cmds and info.path.exists():
+            tpl_vars = self._build_template_variables(info)
+            try:
+                _run_setup_and_capture_env(
+                    teardown_cmds,
+                    info.path,
+                    template_vars=tpl_vars,
+                    phase="teardown_commands",
+                )
+            except SetupCommandsError as exc:
+                logger.warning(
+                    "teardown_commands for %s failed (continuing with worktree removal): %s",
+                    branch,
+                    exc,
+                )
 
         # Kill tmux window — prefer window ID (unique) over window name
         if info.tmux_window_id:

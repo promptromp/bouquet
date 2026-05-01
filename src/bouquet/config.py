@@ -46,6 +46,8 @@ class AgentConfig(BaseModel):
 
 class BootstrapConfig(BaseModel):
     setup_commands: list[str] = Field(default_factory=list)
+    post_deps_commands: list[str] = Field(default_factory=list)
+    teardown_commands: list[str] = Field(default_factory=list)
     copy_env_files: list[str] = Field(default_factory=lambda: [".env", ".env.local", ".envrc"])
     python_version: str | None = None
     python_deps_command: str = "uv sync"

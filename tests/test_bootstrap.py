@@ -104,6 +104,96 @@ def test_bootstrap_returns_env_delta(tmp_path: Path) -> None:
     assert delta.get("BOUQUET_BOOTSTRAP_TEST") == "yes"
 
 
+def test_bootstrap_runs_post_deps_after_deps(tmp_path: Path) -> None:
+    """post_deps_commands must run AFTER python_deps_command, with venv on path."""
+    worktree = tmp_path / "wt"
+    worktree.mkdir()
+
+    # Sentinel files prove ordering: deps cmd writes 'deps', post writes 'post'.
+    deps_marker = worktree / "deps.marker"
+    post_marker = worktree / "post.marker"
+
+    config = BootstrapConfig(
+        setup_commands=[],
+        post_deps_commands=[
+            f'test -f "{deps_marker}" || (echo "post_deps ran before deps" >&2 && exit 1)',
+            f'echo post > "{post_marker}"',
+            "export BOUQUET_POST_DEPS_TEST=ran",
+        ],
+        copy_env_files=[],
+        python_deps_command=f'echo deps > "{deps_marker}"',
+        node_deps_command="",
+        use_cow_clone=False,
+        direnv_allow=False,
+    )
+
+    delta = bootstrap_worktree(
+        repo_path=tmp_path,
+        worktree_path=worktree,
+        config=config,
+        python=True,
+        javascript=False,
+    )
+    assert deps_marker.exists()
+    assert post_marker.exists()
+    # post_deps env vars should be in the merged returned delta.
+    assert delta.get("BOUQUET_POST_DEPS_TEST") == "ran"
+
+
+def test_bootstrap_post_deps_env_merged_with_setup(tmp_path: Path) -> None:
+    """Returned delta should include both setup_commands AND post_deps_commands exports."""
+    worktree = tmp_path / "wt"
+    worktree.mkdir()
+
+    config = BootstrapConfig(
+        setup_commands=["export BOUQUET_FROM_SETUP=s"],
+        post_deps_commands=["export BOUQUET_FROM_POST=p"],
+        copy_env_files=[],
+        python_deps_command="",
+        node_deps_command="",
+        use_cow_clone=False,
+        direnv_allow=False,
+    )
+
+    delta = bootstrap_worktree(
+        repo_path=tmp_path,
+        worktree_path=worktree,
+        config=config,
+        python=True,
+        javascript=False,
+    )
+    assert delta.get("BOUQUET_FROM_SETUP") == "s"
+    assert delta.get("BOUQUET_FROM_POST") == "p"
+
+
+def test_bootstrap_post_deps_failure_raises(tmp_path: Path) -> None:
+    """A failing post_deps_command must raise SetupCommandsError with phase name."""
+    worktree = tmp_path / "wt"
+    worktree.mkdir()
+
+    config = BootstrapConfig(
+        setup_commands=[],
+        post_deps_commands=["echo running...", "exit 9"],
+        copy_env_files=[],
+        python_deps_command="",
+        node_deps_command="",
+        use_cow_clone=False,
+        direnv_allow=False,
+    )
+
+    with pytest.raises(SetupCommandsError) as exc:
+        bootstrap_worktree(
+            repo_path=tmp_path,
+            worktree_path=worktree,
+            config=config,
+            python=True,
+            javascript=False,
+        )
+    msg = str(exc.value)
+    assert "post_deps_commands" in msg
+    assert "exit code 9" in msg
+
+
 def test_bootstrap_no_setup_commands_returns_empty(tmp_path: Path) -> None:
     """Without setup_commands, bootstrap should return an empty dict."""
     worktree = tmp_path / "wt"

@@ -75,6 +75,55 @@ def test_remove_worktree(manager: WorktreeManager) -> None:
     assert len(manager.list_active()) == 0
 
 
+def test_remove_runs_teardown_commands(manager: WorktreeManager, tmp_path: Path) -> None:
+    """teardown_commands should run in the worktree path before tmux/git cleanup."""
+    # Make teardown drop a marker file we can verify after.
+    marker_dir = tmp_path / "teardown-markers"
+    marker_dir.mkdir()
+    marker = marker_dir / "ran.txt"
+    manager.settings.bootstrap.teardown_commands = [
+        f'echo "tore down idx={{{{ BOUQUET_WORKTREE_INDEX }}}}" > "{marker}"',
+    ]
+
+    info = manager.create("feature/with-teardown")
+    expected_idx = info.index
+
+    manager.remove("feature/with-teardown")
+
+    assert marker.exists()
+    assert f"tore down idx={expected_idx}" in marker.read_text()
+    # Worktree was still removed despite teardown running
+    assert len(manager.list_active()) == 0
+
+
+def test_remove_teardown_failure_still_cleans_up(
+    manager: WorktreeManager,
+) -> None:
+    """A failing teardown_command must NOT block tmux/git removal."""
+    manager.settings.bootstrap.teardown_commands = [
+        'echo "about to fail"',
+        "exit 5",
+        "touch /tmp/bouquet-teardown-must-not-create",
+    ]
+
+    manager.create("feature/teardown-fail")
+    # remove() must complete cleanly — teardown failure is best-effort.
+    manager.remove("feature/teardown-fail")
+
+    # Worktree was still removed
+    assert len(manager.list_active()) == 0
+    # Sentinel proves the && short-circuit fired (third command didn't run)
+    assert not Path("/tmp/bouquet-teardown-must-not-create").exists()
+
+
+def test_remove_no_teardown_commands_works(manager: WorktreeManager) -> None:
+    """Removing a worktree with no teardown_commands works as before."""
+    assert manager.settings.bootstrap.teardown_commands == []
+    manager.create("feature/no-teardown")
+    manager.remove("feature/no-teardown")
+    assert len(manager.list_active()) == 0
+
+
 def test_list_active(manager: WorktreeManager) -> None:
     assert manager.list_active() == []
 
