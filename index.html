@@ -1,0 +1,1452 @@
+
+<!doctype html>
+<html lang="en" class="no-js">
+  <head>
+    
+      <meta charset="utf-8">
+      <meta name="viewport" content="width=device-width,initial-scale=1">
+      
+      
+      
+        <link rel="canonical" href="https://promptromp.github.io/bouquet/">
+      
+      
+      
+        <link rel="next" href="configuration/">
+      
+      
+        
+      
+      
+      <link rel="icon" href="assets/logo.png">
+      <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.7.6">
+    
+    
+      
+        <title>bouquet</title>
+      
+    
+    
+      <link rel="stylesheet" href="assets/stylesheets/main.484c7ddc.min.css">
+      
+        
+        <link rel="stylesheet" href="assets/stylesheets/palette.ab4e12ef.min.css">
+      
+      
+
+
+    
+    
+      
+    
+    
+      
+        
+        
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+        <link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Merriweather+Sans:300,300i,400,400i,700,700i%7CRed+Hat+Mono:400,400i,700,700i&display=fallback">
+        <style>:root{--md-text-font:"Merriweather Sans";--md-code-font:"Red Hat Mono"}</style>
+      
+    
+    
+    <script>__md_scope=new URL(".",location),__md_hash=e=>[...e].reduce(((e,_)=>(e<<5)-e+_.charCodeAt(0)),0),__md_get=(e,_=localStorage,t=__md_scope)=>JSON.parse(_.getItem(t.pathname+"."+e)),__md_set=(e,_,t=localStorage,a=__md_scope)=>{try{t.setItem(a.pathname+"."+e,JSON.stringify(_))}catch(e){}}</script>
+    
+      
+
+    
+    
+  </head>
+  
+  
+    
+    
+      
+    
+    
+    
+    
+    <body dir="ltr" data-md-color-scheme="slate" data-md-color-primary="deep-purple" data-md-color-accent="amber">
+  
+    
+    <input class="md-toggle" data-md-toggle="drawer" type="checkbox" id="__drawer" autocomplete="off">
+    <input class="md-toggle" data-md-toggle="search" type="checkbox" id="__search" autocomplete="off">
+    <label class="md-overlay" for="__drawer"></label>
+    <div data-md-component="skip">
+      
+        
+        <a href="#bouquet" class="md-skip">
+          Skip to content
+        </a>
+      
+    </div>
+    <div data-md-component="announce">
+      
+    </div>
+    
+    
+      
+
+  
+
+<header class="md-header md-header--shadow" data-md-component="header">
+  <nav class="md-header__inner md-grid" aria-label="Header">
+    <a href="." title="bouquet" class="md-header__button md-logo" aria-label="bouquet" data-md-component="logo">
+      
+  <img src="assets/logo.png" alt="logo">
+
+    </a>
+    <label class="md-header__button md-icon" for="__drawer">
+      
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M3 6h18v2H3zm0 5h18v2H3zm0 5h18v2H3z"/></svg>
+    </label>
+    <div class="md-header__title" data-md-component="header-title">
+      <div class="md-header__ellipsis">
+        <div class="md-header__topic">
+          <span class="md-ellipsis">
+            bouquet
+          </span>
+        </div>
+        <div class="md-header__topic" data-md-component="header-topic">
+          <span class="md-ellipsis">
+            
+              Home
+            
+          </span>
+        </div>
+      </div>
+    </div>
+    
+      
+        <form class="md-header__option" data-md-component="palette">
+  
+    
+    
+    
+    <input class="md-option" data-md-color-media="" data-md-color-scheme="slate" data-md-color-primary="deep-purple" data-md-color-accent="amber"  aria-label="Dark mode"  type="radio" name="__palette" id="__palette_0">
+    
+      <label class="md-header__button md-icon" title="Dark mode" for="__palette_1" hidden>
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 7a5 5 0 0 1 5 5 5 5 0 0 1-5 5 5 5 0 0 1-5-5 5 5 0 0 1 5-5m0 2a3 3 0 0 0-3 3 3 3 0 0 0 3 3 3 3 0 0 0 3-3 3 3 0 0 0-3-3m0-7 2.39 3.42C13.65 5.15 12.84 5 12 5s-1.65.15-2.39.42zM3.34 7l4.16-.35A7.2 7.2 0 0 0 5.94 8.5c-.44.74-.69 1.5-.83 2.29zm.02 10 1.76-3.77a7.131 7.131 0 0 0 2.38 4.14zM20.65 7l-1.77 3.79a7.02 7.02 0 0 0-2.38-4.15zm-.01 10-4.14.36c.59-.51 1.12-1.14 1.54-1.86.42-.73.69-1.5.83-2.29zM12 22l-2.41-3.44c.74.27 1.55.44 2.41.44.82 0 1.63-.17 2.37-.44z"/></svg>
+      </label>
+    
+  
+    
+    
+    
+    <input class="md-option" data-md-color-media="" data-md-color-scheme="default" data-md-color-primary="deep-purple" data-md-color-accent="amber"  aria-label="Light mode"  type="radio" name="__palette" id="__palette_1">
+    
+      <label class="md-header__button md-icon" title="Light mode" for="__palette_0" hidden>
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="m17.75 4.09-2.53 1.94.91 3.06-2.63-1.81-2.63 1.81.91-3.06-2.53-1.94L12.44 4l1.06-3 1.06 3zm3.5 6.91-1.64 1.25.59 1.98-1.7-1.17-1.7 1.17.59-1.98L15.75 11l2.06-.05L18.5 9l.69 1.95zm-2.28 4.95c.83-.08 1.72 1.1 1.19 1.85-.32.45-.66.87-1.08 1.27C15.17 23 8.84 23 4.94 19.07c-3.91-3.9-3.91-10.24 0-14.14.4-.4.82-.76 1.27-1.08.75-.53 1.93.36 1.85 1.19-.27 2.86.69 5.83 2.89 8.02a9.96 9.96 0 0 0 8.02 2.89m-1.64 2.02a12.08 12.08 0 0 1-7.8-3.47c-2.17-2.19-3.33-5-3.49-7.82-2.81 3.14-2.7 7.96.31 10.98 3.02 3.01 7.84 3.12 10.98.31"/></svg>
+      </label>
+    
+  
+</form>
+      
+    
+    
+      <script>var palette=__md_get("__palette");if(palette&&palette.color){if("(prefers-color-scheme)"===palette.color.media){var media=matchMedia("(prefers-color-scheme: light)"),input=document.querySelector(media.matches?"[data-md-color-media='(prefers-color-scheme: light)']":"[data-md-color-media='(prefers-color-scheme: dark)']");palette.color.media=input.getAttribute("data-md-color-media"),palette.color.scheme=input.getAttribute("data-md-color-scheme"),palette.color.primary=input.getAttribute("data-md-color-primary"),palette.color.accent=input.getAttribute("data-md-color-accent")}for(var[key,value]of Object.entries(palette.color))document.body.setAttribute("data-md-color-"+key,value)}</script>
+    
+    
+    
+      
+      
+        <label class="md-header__button md-icon" for="__search">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        </label>
+        <div class="md-search" data-md-component="search" role="dialog">
+  <label class="md-search__overlay" for="__search"></label>
+  <div class="md-search__inner" role="search">
+    <form class="md-search__form" name="search">
+      <input type="text" class="md-search__input" name="query" aria-label="Search" placeholder="Search" autocapitalize="off" autocorrect="off" autocomplete="off" spellcheck="false" data-md-component="search-query" required>
+      <label class="md-search__icon md-icon" for="__search">
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M20 11v2H8l5.5 5.5-1.42 1.42L4.16 12l7.92-7.92L13.5 5.5 8 11z"/></svg>
+      </label>
+      <nav class="md-search__options" aria-label="Search">
+        
+        <button type="reset" class="md-search__icon md-icon" title="Clear" aria-label="Clear" tabindex="-1">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M19 6.41 17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></svg>
+        </button>
+      </nav>
+      
+    </form>
+    <div class="md-search__output">
+      <div class="md-search__scrollwrap" tabindex="0" data-md-scrollfix>
+        <div class="md-search-result" data-md-component="search-result">
+          <div class="md-search-result__meta">
+            Initializing search
+          </div>
+          <ol class="md-search-result__list" role="presentation"></ol>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+      
+    
+    
+      <div class="md-header__source">
+        <a href="https://github.com/promptromp/bouquet" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M439.6 236.1 244 40.5c-5.4-5.5-12.8-8.5-20.4-8.5s-15 3-20.4 8.4L162.5 81l51.5 51.5c27.1-9.1 52.7 16.8 43.4 43.7l49.7 49.7c34.2-11.8 61.2 31 35.5 56.7-26.5 26.5-70.2-2.9-56-37.3L240.3 199v121.9c25.3 12.5 22.3 41.8 9.1 55-6.4 6.4-15.2 10.1-24.3 10.1s-17.8-3.6-24.3-10.1c-17.6-17.6-11.1-46.9 11.2-56v-123c-20.8-8.5-24.6-30.7-18.6-45L142.6 101 8.5 235.1C3 240.6 0 247.9 0 255.5s3 15 8.5 20.4l195.6 195.7c5.4 5.4 12.7 8.4 20.4 8.4s15-3 20.4-8.4l194.7-194.7c5.4-5.4 8.4-12.8 8.4-20.4s-3-15-8.4-20.4"/></svg>
+  </div>
+  <div class="md-source__repository">
+    bouquet
+  </div>
+</a>
+      </div>
+    
+  </nav>
+  
+</header>
+    
+    <div class="md-container" data-md-component="container">
+      
+      
+        
+          
+        
+      
+      <main class="md-main" data-md-component="main">
+        <div class="md-main__inner md-grid">
+          
+            
+              
+              <div class="md-sidebar md-sidebar--primary" data-md-component="sidebar" data-md-type="navigation" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+
+
+<nav class="md-nav md-nav--primary" aria-label="Navigation" data-md-level="0">
+  <label class="md-nav__title" for="__drawer">
+    <a href="." title="bouquet" class="md-nav__button md-logo" aria-label="bouquet" data-md-component="logo">
+      
+  <img src="assets/logo.png" alt="logo">
+
+    </a>
+    bouquet
+  </label>
+  
+    <div class="md-nav__source">
+      <a href="https://github.com/promptromp/bouquet" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M439.6 236.1 244 40.5c-5.4-5.5-12.8-8.5-20.4-8.5s-15 3-20.4 8.4L162.5 81l51.5 51.5c27.1-9.1 52.7 16.8 43.4 43.7l49.7 49.7c34.2-11.8 61.2 31 35.5 56.7-26.5 26.5-70.2-2.9-56-37.3L240.3 199v121.9c25.3 12.5 22.3 41.8 9.1 55-6.4 6.4-15.2 10.1-24.3 10.1s-17.8-3.6-24.3-10.1c-17.6-17.6-11.1-46.9 11.2-56v-123c-20.8-8.5-24.6-30.7-18.6-45L142.6 101 8.5 235.1C3 240.6 0 247.9 0 255.5s3 15 8.5 20.4l195.6 195.7c5.4 5.4 12.7 8.4 20.4 8.4s15-3 20.4-8.4l194.7-194.7c5.4-5.4 8.4-12.8 8.4-20.4s-3-15-8.4-20.4"/></svg>
+  </div>
+  <div class="md-source__repository">
+    bouquet
+  </div>
+</a>
+    </div>
+  
+  <ul class="md-nav__list" data-md-scrollfix>
+    
+      
+      
+  
+  
+    
+  
+  
+  
+    <li class="md-nav__item md-nav__item--active">
+      
+      <input class="md-nav__toggle md-toggle" type="checkbox" id="__toc">
+      
+      
+        
+      
+      
+        <label class="md-nav__link md-nav__link--active" for="__toc">
+          
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Home
+  
+
+    
+  </span>
+  
+  
+
+          <span class="md-nav__icon md-icon"></span>
+        </label>
+      
+      <a href="." class="md-nav__link md-nav__link--active">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Home
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+      
+        
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#key-features" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Key Features
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#requirements" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Requirements
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#installation" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Installation
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#quick-start" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Quick Start
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Quick Start">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#1-initialize" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        1. Initialize
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#2-start-a-session" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        2. Start a session
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#3-use-the-tui" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        3. Use the TUI
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#4-stop" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        4. Stop
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#services" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Services
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Services">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#template-variables" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Template Variables
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#bootstrap-hooks-setup_commands-vs-post_deps_commands-vs-teardown_commands" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Bootstrap hooks: setup_commands vs post_deps_commands vs teardown_commands
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#agent-profiles" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Agent Profiles
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#activity-detection" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Activity Detection
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#task-queue" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Task Queue
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Task Queue">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#local-sqlite-default" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Local (SQLite) — default
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#github-issues" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        GitHub Issues
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#task-workflow" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Task workflow
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#task-dependencies" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Task Dependencies
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#autopilot" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Autopilot
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#pane-layout" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Pane Layout
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#logs-troubleshooting" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Logs &amp; Troubleshooting
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#architecture" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Architecture
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#related-projects" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Related Projects
+      
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="configuration/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Configuration
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="architecture/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Architecture
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+  </ul>
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+            
+              
+              <div class="md-sidebar md-sidebar--secondary" data-md-component="sidebar" data-md-type="toc" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#key-features" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Key Features
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#requirements" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Requirements
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#installation" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Installation
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#quick-start" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Quick Start
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Quick Start">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#1-initialize" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        1. Initialize
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#2-start-a-session" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        2. Start a session
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#3-use-the-tui" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        3. Use the TUI
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#4-stop" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        4. Stop
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#services" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Services
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Services">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#template-variables" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Template Variables
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#bootstrap-hooks-setup_commands-vs-post_deps_commands-vs-teardown_commands" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Bootstrap hooks: setup_commands vs post_deps_commands vs teardown_commands
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#agent-profiles" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Agent Profiles
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#activity-detection" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Activity Detection
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#task-queue" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Task Queue
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Task Queue">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#local-sqlite-default" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Local (SQLite) — default
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#github-issues" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        GitHub Issues
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#task-workflow" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Task workflow
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#task-dependencies" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Task Dependencies
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#autopilot" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Autopilot
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#pane-layout" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Pane Layout
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#logs-troubleshooting" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Logs &amp; Troubleshooting
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#architecture" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Architecture
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#related-projects" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Related Projects
+      
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+          
+          
+            <div class="md-content" data-md-component="content">
+              
+              <article class="md-content__inner md-typeset">
+                
+                  
+
+
+  
+  
+
+
+<p align="center">
+  <img src="docs/logo.png" alt="bouquet logo" width="320">
+</p>
+
+<h1 id="bouquet">bouquet</h1>
+<p><a href="https://github.com/promptromp/bouquet/actions/workflows/ci.yml"><img alt="CI" src="https://github.com/promptromp/bouquet/actions/workflows/ci.yml/badge.svg" /></a></p>
+<blockquote>
+<p><strong>Warning — Alpha Software</strong>
+Bouquet is under active development. APIs, config format, and CLI behavior may change without notice. Use at your own risk.</p>
+</blockquote>
+<p>An orchestration layer for <strong>multi-agent coding</strong> — multiplexing coding agents across git worktrees with isolated services, all in one tmux session.</p>
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-0-1"><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="nb">cd</span><span class="w"> </span>my-project
+</span><span id="__span-0-2"><a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a>bouquet<span class="w"> </span>start<span class="w">              </span><span class="c1"># TUI launches, create worktrees, agents spin up</span>
+</span></code></pre></div>
+<h3 id="key-features">Key Features</h3>
+<table>
+<thead>
+<tr>
+<th></th>
+<th>Feature</th>
+<th>Details</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>🌿</td>
+<td><strong>Git worktree isolation</strong></td>
+<td>Each feature branch gets its own worktree, venv, and node_modules — no cross-contamination</td>
+</tr>
+<tr>
+<td>🖥️</td>
+<td><strong>Multi-pane services</strong></td>
+<td>Run API servers, workers, frontends alongside the agent with automatic port offsetting per worktree</td>
+</tr>
+<tr>
+<td>🤖</td>
+<td><strong>Agent orchestration</strong></td>
+<td>TUI in tmux window 0 to create, switch, and manage worktree-backed agent windows</td>
+</tr>
+<tr>
+<td>📋</td>
+<td><strong>Task queue</strong></td>
+<td>Define a backlog of tasks that get automatically delegated to worktrees — agents pick up work without manual intervention</td>
+</tr>
+<tr>
+<td>🔧</td>
+<td><strong>Rich configuration</strong></td>
+<td>Expressive <code>.bouquet.toml</code> with template expressions (<code>{{ 8000 + BOUQUET_WORKTREE_INDEX }}</code>), per-worktree variables, agent profiles, and multi-service layouts</td>
+</tr>
+<tr>
+<td>⚡</td>
+<td><strong>Fast bootstrap</strong></td>
+<td>CoW-clones <code>.venv</code>/<code>node_modules</code> (APFS), copies <code>.env</code> files, runs <code>uv sync</code>/<code>pnpm install</code></td>
+</tr>
+<tr>
+<td>🔌</td>
+<td><strong>Agent-agnostic</strong></td>
+<td>Named profiles let you mix Claude, Aider, Codex, or any CLI agent — even different agents per worktree</td>
+</tr>
+</tbody>
+</table>
+<hr />
+<h2 id="requirements">Requirements</h2>
+<ul>
+<li>Python 3.14+</li>
+<li><a href="https://github.com/tmux/tmux">tmux</a> (<code>brew install tmux</code>)</li>
+<li><a href="https://cli.github.com/">GitHub CLI</a> (optional, <code>brew install gh</code> — enables PR links in TUI and GitHub Issues task backend)</li>
+<li><a href="https://direnv.net/">direnv</a> (optional, <code>brew install direnv</code>)</li>
+<li>Language package managers as needed (<code>uv</code>, <code>pnpm</code>)</li>
+</ul>
+<h2 id="installation">Installation</h2>
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-1-1"><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a><span class="c1"># Run without installing</span>
+</span><span id="__span-1-2"><a id="__codelineno-1-2" name="__codelineno-1-2" href="#__codelineno-1-2"></a>uvx<span class="w"> </span>--from<span class="w"> </span>pybouquet<span class="w"> </span>bouquet<span class="w"> </span>--help
+</span><span id="__span-1-3"><a id="__codelineno-1-3" name="__codelineno-1-3" href="#__codelineno-1-3"></a>
+</span><span id="__span-1-4"><a id="__codelineno-1-4" name="__codelineno-1-4" href="#__codelineno-1-4"></a><span class="c1"># Or install via pip</span>
+</span><span id="__span-1-5"><a id="__codelineno-1-5" name="__codelineno-1-5" href="#__codelineno-1-5"></a>pip<span class="w"> </span>install<span class="w"> </span>pybouquet
+</span><span id="__span-1-6"><a id="__codelineno-1-6" name="__codelineno-1-6" href="#__codelineno-1-6"></a>
+</span><span id="__span-1-7"><a id="__codelineno-1-7" name="__codelineno-1-7" href="#__codelineno-1-7"></a><span class="c1"># Or from source (development)</span>
+</span><span id="__span-1-8"><a id="__codelineno-1-8" name="__codelineno-1-8" href="#__codelineno-1-8"></a>git<span class="w"> </span>clone<span class="w"> </span>https://github.com/promptromp/bouquet.git
+</span><span id="__span-1-9"><a id="__codelineno-1-9" name="__codelineno-1-9" href="#__codelineno-1-9"></a><span class="nb">cd</span><span class="w"> </span>bouquet
+</span><span id="__span-1-10"><a id="__codelineno-1-10" name="__codelineno-1-10" href="#__codelineno-1-10"></a>uv<span class="w"> </span>sync
+</span></code></pre></div>
+<hr />
+<h2 id="quick-start">Quick Start</h2>
+<h3 id="1-initialize">1. Initialize</h3>
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-2-1"><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a><span class="nb">cd</span><span class="w"> </span>/path/to/your/repo
+</span><span id="__span-2-2"><a id="__codelineno-2-2" name="__codelineno-2-2" href="#__codelineno-2-2"></a>bouquet<span class="w"> </span>init
+</span></code></pre></div>
+<p>Creates a <code>.bouquet.toml</code> template. Edit it to configure your project.</p>
+<h3 id="2-start-a-session">2. Start a session</h3>
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-3-1"><a id="__codelineno-3-1" name="__codelineno-3-1" href="#__codelineno-3-1"></a>bouquet<span class="w"> </span>start
+</span></code></pre></div>
+<p>This will:
+1. Create a tmux session (<code>bouquet-&lt;project-name&gt;</code>)
+2. Launch the orchestrator TUI in window 0
+3. Adopt any existing git worktrees
+4. Attach you to the session</p>
+<p>You can also pass arguments explicitly:</p>
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-4-1"><a id="__codelineno-4-1" name="__codelineno-4-1" href="#__codelineno-4-1"></a>bouquet<span class="w"> </span>start<span class="w"> </span>my-project<span class="w"> </span>--repo<span class="w"> </span>/path/to/repo<span class="w"> </span>--config<span class="w"> </span>/path/to/.bouquet.toml
+</span></code></pre></div>
+<h3 id="3-use-the-tui">3. Use the TUI</h3>
+<table>
+<thead>
+<tr>
+<th>Key</th>
+<th>Action</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>N</code></td>
+<td>Create a new worktree (opens branch dialog with optional agent profile selector)</td>
+</tr>
+<tr>
+<td><code>S</code> / <code>Enter</code></td>
+<td>Switch to the selected worktree's window</td>
+</tr>
+<tr>
+<td><code>D</code></td>
+<td>Delete the selected worktree and its window</td>
+</tr>
+<tr>
+<td><code>a</code></td>
+<td>Toggle auto-accept for selected worktree (auto-sends "y" at permission prompts)</td>
+</tr>
+<tr>
+<td><code>A</code></td>
+<td>Toggle autopilot mode (auto-schedules tasks by dependency order)</td>
+</tr>
+<tr>
+<td><code>P</code></td>
+<td>Send a prompt to selected or all agent terminal(s) via tmux send-keys</td>
+</tr>
+<tr>
+<td><code>T</code></td>
+<td>Request a status summary from all agents (captures responses)</td>
+</tr>
+<tr>
+<td><code>C</code></td>
+<td>Create a new task in the task queue</td>
+</tr>
+<tr>
+<td><code>X</code></td>
+<td>Pick up the highlighted task (creates worktree and sends task to agent)</td>
+</tr>
+<tr>
+<td><code>M</code></td>
+<td>Complete the highlighted task (optionally remove the associated worktree)</td>
+</tr>
+<tr>
+<td><code>Backspace</code></td>
+<td>Delete the highlighted task from the queue</td>
+</tr>
+<tr>
+<td><code>R</code></td>
+<td>Refresh the worktree list and task queue</td>
+</tr>
+<tr>
+<td><code>Q</code></td>
+<td>Quit (with confirmation — kills the session)</td>
+</tr>
+</tbody>
+</table>
+<p>When you create a worktree, bouquet will:
+- Create a git worktree with a new branch
+- Bootstrap the environment (copy <code>.env</code> files, CoW-clone <code>.venv</code>/<code>node_modules</code>)
+- Open a new tmux window with service panes (if configured)
+- Launch the agent (e.g. <code>claude</code>) in pane 0</p>
+<p>Switch back to the orchestrator: <code>Ctrl-b 0</code>.</p>
+<h3 id="4-stop">4. Stop</h3>
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-5-1"><a id="__codelineno-5-1" name="__codelineno-5-1" href="#__codelineno-5-1"></a>bouquet<span class="w"> </span>stop
+</span></code></pre></div>
+<p>Cleans up all managed worktrees, resets any in-progress tasks back to open, kills the tmux session, and removes state.</p>
+<hr />
+<h2 id="services">Services</h2>
+<p>Run dev servers alongside the agent in each worktree window. Define them in <code>.bouquet.toml</code>:</p>
+<div class="language-toml highlight"><pre><span></span><code><span id="__span-6-1"><a id="__codelineno-6-1" name="__codelineno-6-1" href="#__codelineno-6-1"></a><span class="k">[[services]]</span>
+</span><span id="__span-6-2"><a id="__codelineno-6-2" name="__codelineno-6-2" href="#__codelineno-6-2"></a><span class="n">name</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s2">&quot;api&quot;</span>
+</span><span id="__span-6-3"><a id="__codelineno-6-3" name="__codelineno-6-3" href="#__codelineno-6-3"></a><span class="n">command</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s2">&quot;uv run uvicorn app.main:app --reload --port {{ 8000 + BOUQUET_WORKTREE_INDEX }}&quot;</span>
+</span><span id="__span-6-4"><a id="__codelineno-6-4" name="__codelineno-6-4" href="#__codelineno-6-4"></a>
+</span><span id="__span-6-5"><a id="__codelineno-6-5" name="__codelineno-6-5" href="#__codelineno-6-5"></a><span class="k">[[services]]</span>
+</span><span id="__span-6-6"><a id="__codelineno-6-6" name="__codelineno-6-6" href="#__codelineno-6-6"></a><span class="n">name</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s2">&quot;frontend&quot;</span>
+</span><span id="__span-6-7"><a id="__codelineno-6-7" name="__codelineno-6-7" href="#__codelineno-6-7"></a><span class="n">command</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s2">&quot;npm run dev -- --port {{ 3000 + BOUQUET_WORKTREE_INDEX }}&quot;</span>
+</span><span id="__span-6-8"><a id="__codelineno-6-8" name="__codelineno-6-8" href="#__codelineno-6-8"></a>
+</span><span id="__span-6-9"><a id="__codelineno-6-9" name="__codelineno-6-9" href="#__codelineno-6-9"></a><span class="k">[tmux]</span>
+</span><span id="__span-6-10"><a id="__codelineno-6-10" name="__codelineno-6-10" href="#__codelineno-6-10"></a><span class="n">layout</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s2">&quot;main-vertical&quot;</span>
+</span></code></pre></div>
+<p>Each worktree gets a unique index (1, 2, 3, ...) so services bind to different ports automatically.</p>
+<h3 id="template-variables">Template Variables</h3>
+<table>
+<thead>
+<tr>
+<th>Variable</th>
+<th>Type</th>
+<th>Example</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>BOUQUET_WORKTREE_INDEX</code></td>
+<td>int</td>
+<td><code>1</code>, <code>2</code>, <code>3</code></td>
+</tr>
+<tr>
+<td><code>BOUQUET_WORKTREE_BRANCH</code></td>
+<td>str</td>
+<td><code>feature/auth</code></td>
+</tr>
+<tr>
+<td><code>BOUQUET_WORKTREE_PATH</code></td>
+<td>str</td>
+<td><code>/path/to/.bouquet-worktrees/feature-auth</code></td>
+</tr>
+<tr>
+<td><code>BOUQUET_PROJECT_NAME</code></td>
+<td>str</td>
+<td><code>my-project</code></td>
+</tr>
+</tbody>
+</table>
+<p>Arithmetic supported: <code>{{ 8000 + BOUQUET_WORKTREE_INDEX }}</code> → <code>8001</code>.</p>
+<p>The same template variables are also available in <code>[bootstrap]</code> <code>setup_commands</code>, <code>post_deps_commands</code>, and <code>teardown_commands</code> — both as <code>{{ … }}</code> placeholders and as plain shell env vars (<code>$BOUQUET_WORKTREE_INDEX</code>, etc.) — so setup/teardown scripts can provision and reclaim per-worktree resources (databases, queues, …) without external coordination.</p>
+<p>No services defined = single pane with just the agent (backward compatible).</p>
+<h3 id="bootstrap-hooks-setup_commands-vs-post_deps_commands-vs-teardown_commands">Bootstrap hooks: <code>setup_commands</code> vs <code>post_deps_commands</code> vs <code>teardown_commands</code></h3>
+<p>The three <code>[bootstrap]</code> hook lists run at different points in the worktree lifecycle:</p>
+<table>
+<thead>
+<tr>
+<th>Hook</th>
+<th>When</th>
+<th>On failure</th>
+<th>Typical use</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>setup_commands</code></td>
+<td><strong>Before</strong> <code>python_deps_command</code> / <code>node_deps_command</code></td>
+<td><strong>Loud</strong> — raises <code>SetupCommandsError</code>, worktree → <code>ERROR</code></td>
+<td>private-registry auth (CodeArtifact tokens), provisioning per-worktree DBs / queues</td>
+</tr>
+<tr>
+<td><code>post_deps_commands</code></td>
+<td><strong>After</strong> deps install, before <code>direnv_allow</code> (so <code>.venv</code> / <code>node_modules</code> exist)</td>
+<td><strong>Loud</strong> — same as setup_commands</td>
+<td><code>uv run migrate upgrade head</code>, asset compilation, anything that needs the project's tooling</td>
+</tr>
+<tr>
+<td><code>teardown_commands</code></td>
+<td><strong>Before</strong> tmux window kill + git worktree removal (so the on-disk checkout is still reachable)</td>
+<td><strong>Best-effort</strong> — failures logged, cleanup proceeds</td>
+<td>reclaiming external per-worktree resources at remove time (drop DBs, delete queues)</td>
+</tr>
+</tbody>
+</table>
+<p><code>setup_commands</code> and <code>post_deps_commands</code> also have <strong>env-capture</strong>: any <code>export FOO=bar</code> lines in the user's commands are captured and propagated into both subsequent install commands and the tmux session, so service panes inherit them.</p>
+<p>See <a href="docs/configuration.md#bootstrap">docs/configuration.md</a> for the full reference.</p>
+<hr />
+<h2 id="agent-profiles">Agent Profiles</h2>
+<p>Named agent configurations so you can switch between Claude, Aider, Codex, etc. per worktree:</p>
+<div class="language-toml highlight"><pre><span></span><code><span id="__span-7-1"><a id="__codelineno-7-1" name="__codelineno-7-1" href="#__codelineno-7-1"></a><span class="k">[agent]</span>
+</span><span id="__span-7-2"><a id="__codelineno-7-2" name="__codelineno-7-2" href="#__codelineno-7-2"></a><span class="n">command</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s2">&quot;claude&quot;</span>
+</span><span id="__span-7-3"><a id="__codelineno-7-3" name="__codelineno-7-3" href="#__codelineno-7-3"></a><span class="n">default_profile</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s2">&quot;claude&quot;</span>
+</span><span id="__span-7-4"><a id="__codelineno-7-4" name="__codelineno-7-4" href="#__codelineno-7-4"></a>
+</span><span id="__span-7-5"><a id="__codelineno-7-5" name="__codelineno-7-5" href="#__codelineno-7-5"></a><span class="k">[[agent.profiles]]</span>
+</span><span id="__span-7-6"><a id="__codelineno-7-6" name="__codelineno-7-6" href="#__codelineno-7-6"></a><span class="n">name</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s2">&quot;claude&quot;</span>
+</span><span id="__span-7-7"><a id="__codelineno-7-7" name="__codelineno-7-7" href="#__codelineno-7-7"></a><span class="n">command</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s2">&quot;claude&quot;</span>
+</span><span id="__span-7-8"><a id="__codelineno-7-8" name="__codelineno-7-8" href="#__codelineno-7-8"></a>
+</span><span id="__span-7-9"><a id="__codelineno-7-9" name="__codelineno-7-9" href="#__codelineno-7-9"></a><span class="k">[[agent.profiles]]</span>
+</span><span id="__span-7-10"><a id="__codelineno-7-10" name="__codelineno-7-10" href="#__codelineno-7-10"></a><span class="n">name</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s2">&quot;aider&quot;</span>
+</span><span id="__span-7-11"><a id="__codelineno-7-11" name="__codelineno-7-11" href="#__codelineno-7-11"></a><span class="n">command</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s2">&quot;aider&quot;</span>
+</span><span id="__span-7-12"><a id="__codelineno-7-12" name="__codelineno-7-12" href="#__codelineno-7-12"></a><span class="n">args</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">[</span><span class="s2">&quot;--model&quot;</span><span class="p">,</span><span class="w"> </span><span class="s2">&quot;claude-sonnet-4-20250514&quot;</span><span class="p">]</span>
+</span></code></pre></div>
+<p>When profiles are defined, the TUI's new-worktree dialog shows a profile selector. If no profiles are defined, the top-level <code>command</code>/<code>args</code> are used (backward compatible).</p>
+<hr />
+<h2 id="activity-detection">Activity Detection</h2>
+<p>Bouquet polls each agent's tmux pane every 2 seconds to infer real-time status:</p>
+<table>
+<thead>
+<tr>
+<th>Status</th>
+<th>Meaning</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>● running</strong> (green)</td>
+<td>Agent output is actively changing</td>
+</tr>
+<tr>
+<td><strong>◆ waiting</strong> (yellow)</td>
+<td>Agent output stopped and a permission prompt was detected</td>
+</tr>
+<tr>
+<td><strong>○ idle</strong> (dim)</td>
+<td>Agent output hasn't changed for several polls</td>
+</tr>
+</tbody>
+</table>
+<p>This replaces the static "active" status with live feedback. The TUI table updates automatically.</p>
+<hr />
+<h2 id="task-queue">Task Queue</h2>
+<p>Define a backlog of tasks that agents pick up automatically. Two backends are supported:</p>
+<h3 id="local-sqlite-default">Local (SQLite) — default</h3>
+<p>Tasks are stored in <code>~/.local/state/bouquet/&lt;project&gt;.tasks.db</code>. No external dependencies.</p>
+<div class="language-toml highlight"><pre><span></span><code><span id="__span-8-1"><a id="__codelineno-8-1" name="__codelineno-8-1" href="#__codelineno-8-1"></a><span class="k">[task_queue]</span>
+</span><span id="__span-8-2"><a id="__codelineno-8-2" name="__codelineno-8-2" href="#__codelineno-8-2"></a><span class="n">backend</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s2">&quot;local&quot;</span>
+</span><span id="__span-8-3"><a id="__codelineno-8-3" name="__codelineno-8-3" href="#__codelineno-8-3"></a><span class="n">auto_branch_prefix</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s2">&quot;task/&quot;</span>
+</span></code></pre></div>
+<h3 id="github-issues">GitHub Issues</h3>
+<p>Uses your repo's GitHub Issues as the task source. Requires <code>gh</code> CLI authenticated.</p>
+<div class="language-toml highlight"><pre><span></span><code><span id="__span-9-1"><a id="__codelineno-9-1" name="__codelineno-9-1" href="#__codelineno-9-1"></a><span class="k">[task_queue]</span>
+</span><span id="__span-9-2"><a id="__codelineno-9-2" name="__codelineno-9-2" href="#__codelineno-9-2"></a><span class="n">backend</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s2">&quot;github&quot;</span>
+</span><span id="__span-9-3"><a id="__codelineno-9-3" name="__codelineno-9-3" href="#__codelineno-9-3"></a><span class="n">label_filter</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s2">&quot;bouquet&quot;</span><span class="w">     </span><span class="c1"># only issues with this label appear as tasks</span>
+</span><span id="__span-9-4"><a id="__codelineno-9-4" name="__codelineno-9-4" href="#__codelineno-9-4"></a><span class="n">auto_branch_prefix</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s2">&quot;task/&quot;</span>
+</span></code></pre></div>
+<p><strong>Status mapping:</strong> OPEN = open issue, IN_PROGRESS = open issue + <code>in-progress</code> label, DONE = closed issue.</p>
+<h3 id="task-workflow">Task workflow</h3>
+<ol>
+<li><strong>Create</strong> (<code>c</code>) — opens a dialog to create a task with an optional parent dependency</li>
+<li><strong>Pick up</strong> (<code>x</code>) — creates a worktree from the task, marks it in-progress, and sends the task description to the agent</li>
+<li><strong>Complete</strong> (<code>m</code>) — marks the task as done, optionally removes the associated worktree</li>
+<li><strong>Reconciliation</strong> — on startup, tasks stuck as in-progress (from a crash or quit) are automatically reset to open if their worktree no longer exists</li>
+</ol>
+<h3 id="task-dependencies">Task Dependencies</h3>
+<p>Tasks can declare a parent dependency, forming a DAG. A task with an unsatisfied dependency shows as <strong>blocked</strong> in the queue and cannot be picked up until its parent is done. Cycles are rejected at creation time.</p>
+<h3 id="autopilot">Autopilot</h3>
+<p>Press <code>A</code> to toggle autopilot mode. When active, bouquet automatically:</p>
+<ul>
+<li>Picks up tasks whose dependencies are satisfied (or have none)</li>
+<li>Runs up to <code>max_autopilot_concurrency</code> tasks in parallel (default 3)</li>
+<li>Enables auto-accept on all autopilot-created worktrees</li>
+<li>Auto-completes tasks when their agent goes idle (~10 seconds)</li>
+<li>Cascades: completing a parent unblocks its children for the next scheduling cycle</li>
+</ul>
+<div class="language-toml highlight"><pre><span></span><code><span id="__span-10-1"><a id="__codelineno-10-1" name="__codelineno-10-1" href="#__codelineno-10-1"></a><span class="k">[task_queue]</span>
+</span><span id="__span-10-2"><a id="__codelineno-10-2" name="__codelineno-10-2" href="#__codelineno-10-2"></a><span class="n">max_autopilot_concurrency</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mi">3</span><span class="w">    </span><span class="c1"># max parallel worktrees</span>
+</span><span id="__span-10-3"><a id="__codelineno-10-3" name="__codelineno-10-3" href="#__codelineno-10-3"></a><span class="n">autopilot_auto_complete</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="kc">true</span><span class="w">   </span><span class="c1"># auto-complete IDLE tasks</span>
+</span></code></pre></div>
+<hr />
+<h3 id="pane-layout">Pane Layout</h3>
+<p>With <code>layout = "main-vertical"</code> and two services:</p>
+<div class="language-text highlight"><pre><span></span><code><span id="__span-11-1"><a id="__codelineno-11-1" name="__codelineno-11-1" href="#__codelineno-11-1"></a>┌──────────────────┬────────────┐
+</span><span id="__span-11-2"><a id="__codelineno-11-2" name="__codelineno-11-2" href="#__codelineno-11-2"></a>│                  │   api      │
+</span><span id="__span-11-3"><a id="__codelineno-11-3" name="__codelineno-11-3" href="#__codelineno-11-3"></a>│   agent (claude) ├────────────┤
+</span><span id="__span-11-4"><a id="__codelineno-11-4" name="__codelineno-11-4" href="#__codelineno-11-4"></a>│                  │  frontend  │
+</span><span id="__span-11-5"><a id="__codelineno-11-5" name="__codelineno-11-5" href="#__codelineno-11-5"></a>└──────────────────┴────────────┘
+</span></code></pre></div>
+<hr />
+<h2 id="logs-troubleshooting">Logs &amp; Troubleshooting</h2>
+<p>Bouquet writes a rotating log file to <code>~/.local/state/bouquet/&lt;project&gt;.log</code> (5 MB × 3 backups). <code>bouquet start</code> prints the path to stderr on launch.</p>
+<p>When a worktree creation fails — most often because a <code>setup_commands</code> or <code>post_deps_commands</code> step exited non-zero — the TUI shows a terse toast (<code>Error creating worktree: …</code>) but the captured stdout and stderr from your bash commands land in the log file, along with the phase name (<code>setup_commands</code> vs <code>post_deps_commands</code>), cwd, and exit code. Tail it to debug:</p>
+<div class="language-sh highlight"><pre><span></span><code><span id="__span-12-1"><a id="__codelineno-12-1" name="__codelineno-12-1" href="#__codelineno-12-1"></a>tail<span class="w"> </span>-f<span class="w"> </span>~/.local/state/bouquet/&lt;project&gt;.log
+</span></code></pre></div>
+<p>The <code>SetupCommandsError</code> raised on failure includes the log file path in its message, so the toast will point you there directly.</p>
+<p><code>teardown_commands</code> failures are best-effort and don't block worktree removal — they log a <code>WARNING</code>-level line in the same log file, so check there if a worktree was removed but external resources weren't reclaimed.</p>
+<p>Pass <code>--log-level=DEBUG</code> to <code>bouquet start</code> for more verbose output (e.g. each rendered <code>setup_commands</code> / <code>post_deps_commands</code> / <code>teardown_commands</code> line):</p>
+<div class="language-sh highlight"><pre><span></span><code><span id="__span-13-1"><a id="__codelineno-13-1" name="__codelineno-13-1" href="#__codelineno-13-1"></a>bouquet<span class="w"> </span>start<span class="w"> </span>--log-level<span class="o">=</span>DEBUG
+</span></code></pre></div>
+<hr />
+<h2 id="architecture">Architecture</h2>
+<div class="language-text highlight"><pre><span></span><code><span id="__span-14-1"><a id="__codelineno-14-1" name="__codelineno-14-1" href="#__codelineno-14-1"></a>The Conceptual Stack
+</span><span id="__span-14-2"><a id="__codelineno-14-2" name="__codelineno-14-2" href="#__codelineno-14-2"></a>┌─────────────────────────────────────────┐
+</span><span id="__span-14-3"><a id="__codelineno-14-3" name="__codelineno-14-3" href="#__codelineno-14-3"></a>│         Orchestration Layer             │  ← TUI, agent coordination, task queue
+</span><span id="__span-14-4"><a id="__codelineno-14-4" name="__codelineno-14-4" href="#__codelineno-14-4"></a>├─────────────────────────────────────────┤
+</span><span id="__span-14-5"><a id="__codelineno-14-5" name="__codelineno-14-5" href="#__codelineno-14-5"></a>│         Session / Mux Layer             │  ← tmux sessions, windows, panes
+</span><span id="__span-14-6"><a id="__codelineno-14-6" name="__codelineno-14-6" href="#__codelineno-14-6"></a>├─────────────────────────────────────────┤
+</span><span id="__span-14-7"><a id="__codelineno-14-7" name="__codelineno-14-7" href="#__codelineno-14-7"></a>│         Isolation Layer                 │  ← git worktrees + env isolation
+</span><span id="__span-14-8"><a id="__codelineno-14-8" name="__codelineno-14-8" href="#__codelineno-14-8"></a>├─────────────────────────────────────────┤
+</span><span id="__span-14-9"><a id="__codelineno-14-9" name="__codelineno-14-9" href="#__codelineno-14-9"></a>│         Environment Layer               │  ← venv/node_modules/env vars
+</span><span id="__span-14-10"><a id="__codelineno-14-10" name="__codelineno-14-10" href="#__codelineno-14-10"></a>└─────────────────────────────────────────┘
+</span></code></pre></div>
+<hr />
+<h2 id="related-projects">Related Projects</h2>
+<p>Bouquet draws inspiration from and complements several tools in the multi-agent coding space:</p>
+<ul>
+<li>
+<p><strong><a href="https://github.com/smtg-ai/claude-squad">claude-squad</a></strong> — A Go-based TUI for managing multiple Claude Code instances in parallel. Claude-squad focuses on running agents side-by-side with a clean terminal UI. Bouquet goes further with declarative multi-service layouts (API servers, frontends, workers per worktree), a rich template-based configuration language with per-worktree variable expansion, and a task queue for automatic work delegation across agents.</p>
+</li>
+<li>
+<p><strong><a href="https://github.com/ruvnet/ruflo">ruflo</a></strong> — A Rust-based agentic workflow orchestrator with a focus on DAG-based task execution and CI/CD integration. Ruflo takes a pipeline-oriented approach to agent coordination, while bouquet is designed around the developer's local workflow — git worktrees, tmux sessions, and interactive TUI management with live activity detection.</p>
+</li>
+<li>
+<p><strong><a href="https://code.claude.com/docs/en/agent-teams">Claude Code Agent Teams</a></strong> — Anthropic's experimental built-in feature for coordinating multiple Claude Code agents. Agent Teams operates within the Claude Code runtime itself. Bouquet is agent-agnostic (works with Claude, Aider, Codex, or any CLI tool), provides full control over environment isolation, service orchestration, and configuration through <code>.bouquet.toml</code>.</p>
+</li>
+</ul>
+
+
+
+
+
+
+
+
+
+
+
+
+                
+              </article>
+            </div>
+          
+          
+<script>var target=document.getElementById(location.hash.slice(1));target&&target.name&&(target.checked=target.name.startsWith("__tabbed_"))</script>
+        </div>
+        
+      </main>
+      
+        <footer class="md-footer">
+  
+    
+      
+      <nav class="md-footer__inner md-grid" aria-label="Footer" >
+        
+        
+          
+          <a href="configuration/" class="md-footer__link md-footer__link--next" aria-label="Next: Configuration">
+            <div class="md-footer__title">
+              <span class="md-footer__direction">
+                Next
+              </span>
+              <div class="md-ellipsis">
+                Configuration
+              </div>
+            </div>
+            <div class="md-footer__button md-icon">
+              
+              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M4 11v2h12l-5.5 5.5 1.42 1.42L19.84 12l-7.92-7.92L10.5 5.5 16 11z"/></svg>
+            </div>
+          </a>
+        
+      </nav>
+    
+  
+  <div class="md-footer-meta md-typeset">
+    <div class="md-footer-meta__inner md-grid">
+      <div class="md-copyright">
+  
+    <div class="md-copyright__highlight">
+      Copyright &copy; 2025 PromptRomp
+    </div>
+  
+  
+    Made with
+    <a href="https://squidfunk.github.io/mkdocs-material/" target="_blank" rel="noopener">
+      Material for MkDocs
+    </a>
+  
+</div>
+      
+        
+<div class="md-social">
+  
+    
+    
+    
+    
+      
+      
+    
+    <a href="https://github.com/promptromp/bouquet" target="_blank" rel="noopener" title="github.com" class="md-social__link">
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 .297c-6.63 0-12 5.373-12 12 0 5.303 3.438 9.8 8.205 11.385.6.113.82-.258.82-.577 0-.285-.01-1.04-.015-2.04-3.338.724-4.042-1.61-4.042-1.61C4.422 18.07 3.633 17.7 3.633 17.7c-1.087-.744.084-.729.084-.729 1.205.084 1.838 1.236 1.838 1.236 1.07 1.835 2.809 1.305 3.495.998.108-.776.417-1.305.76-1.605-2.665-.3-5.466-1.332-5.466-5.93 0-1.31.465-2.38 1.235-3.22-.135-.303-.54-1.523.105-3.176 0 0 1.005-.322 3.3 1.23.96-.267 1.98-.399 3-.405 1.02.006 2.04.138 3 .405 2.28-1.552 3.285-1.23 3.285-1.23.645 1.653.24 2.873.12 3.176.765.84 1.23 1.91 1.23 3.22 0 4.61-2.805 5.625-5.475 5.92.42.36.81 1.096.81 2.22 0 1.606-.015 2.896-.015 3.286 0 .315.21.69.825.57C20.565 22.092 24 17.592 24 12.297c0-6.627-5.373-12-12-12"/></svg>
+    </a>
+  
+</div>
+      
+    </div>
+  </div>
+</footer>
+      
+    </div>
+    <div class="md-dialog" data-md-component="dialog">
+      <div class="md-dialog__inner md-typeset"></div>
+    </div>
+    
+    
+    
+      
+      
+      <script id="__config" type="application/json">{"annotate": null, "base": ".", "features": ["content.code.copy", "navigation.footer"], "search": "assets/javascripts/workers/search.2c215733.min.js", "tags": null, "translations": {"clipboard.copied": "Copied to clipboard", "clipboard.copy": "Copy to clipboard", "search.result.more.one": "1 more on this page", "search.result.more.other": "# more on this page", "search.result.none": "No matching documents", "search.result.one": "1 matching document", "search.result.other": "# matching documents", "search.result.placeholder": "Type to start searching", "search.result.term.missing": "Missing", "select.version": "Select version"}, "version": null}</script>
+    
+    
+      <script src="assets/javascripts/bundle.79ae519e.min.js"></script>
+      
+    
+  </body>
+</html>
